@@ -261,22 +261,6 @@ attack_config = AttackConfig(
 8. Push to branch (`git push origin feature/amazing-feature`)
 9. Open Pull Request
 
-### Development Setup
-
-```bash
-# Install development dependencies
-pip install pytest black isort flake8 mypy
-
-# Run code quality checks
-black src/ tests/
-isort src/ tests/
-flake8 src/ tests/
-mypy src/
-
-# Run full test suite
-python -m pytest tests/ -v --cov=src/
-```
-
 ## 📚 Research Background
 
 This implementation is based on cutting-edge research in neural network verification:
