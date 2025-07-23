@@ -1,6 +1,6 @@
 # Neural Network Robustness Verification Tool
 
-A state-of-the-art neural network robustness verification tool that combines formal verification methods with adversarial attacks for comprehensive AI security analysis.
+A neural network robustness verification tool that combines formal verification methods with adversarial attacks for comprehensive AI security analysis.
 
 ## 🎯 Overview
 
@@ -187,15 +187,6 @@ src/core/
 - **AttackGuidedEngine**: Hybrid strategy combining attacks + formal verification
 - **FGSMAttack / IterativeFGSM**: Adversarial attack implementations
 - **Test Models**: Various neural network architectures for testing
-
-## 🎯 Hackathon Potential
-
-Perfect for AI hackathons focusing on:
-- **GPU Acceleration**: Massive speedup opportunities (10-100x)
-- **Real-world Impact**: AI security is critical industry need
-- **Technical Innovation**: Attack-guided verification is novel approach
-- **Scalability**: Can handle production-scale models
-- **Open Source**: MIT license for easy collaboration
 
 ### Potential Extensions
 
