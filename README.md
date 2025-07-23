@@ -307,5 +307,3 @@ For questions about this implementation or collaboration opportunities:
 - [VNN-COMP](https://sites.google.com/view/vnn2024): International verification competition
 
 ---
-
-**Built with ❤️ for AI Security and Robustness Verification**
