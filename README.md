@@ -4,7 +4,7 @@ A compact verification stack that combines **fast adversarial attacks** with **f
 
 > **“Is this model robust within ε under L∞/L2?”**
 
-…and returns **verified / falsified**, with **runtime & memory**. The full test suite is green (80/80).
+…and returns **verified / falsified**, with **runtime & memory**. 
 
 ---
 
