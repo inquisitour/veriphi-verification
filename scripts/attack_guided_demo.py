@@ -405,7 +405,6 @@ def main():
     
     if passed == total:
         print("\n🎉 All attack-guided verification tests passed!")
-        print("✅ Step 7-8 implementation is working correctly")
         print("\n🚀 Key Features Implemented:")
         print("   • Fast adversarial attacks (FGSM, I-FGSM)")
         print("   • Attack-guided verification strategy")
