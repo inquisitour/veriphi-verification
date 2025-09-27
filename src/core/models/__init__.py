@@ -18,6 +18,9 @@ from .test_models import (
     MODEL_CONFIGS
 )
 
+from .resnet_stubs import create_resnet18, create_resnet50
+from typing import List, Type
+
 __all__ = [
     # Model classes
     'SimpleLinearNet',

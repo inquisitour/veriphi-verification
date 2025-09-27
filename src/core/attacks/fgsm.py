@@ -1,6 +1,8 @@
+# src/core/attacks/fgsm.py
 from __future__ import annotations
+
 import time
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -8,107 +10,139 @@ import torch.nn.functional as F
 
 from .base import (
     AdversarialAttack,
-    AttackResult,
     AttackConfig,
+    AttackResult,
     AttackStatus,
 )
 
-
+# -----------------------------
+# helpers
+# -----------------------------
 def _ensure_batch(x: torch.Tensor) -> torch.Tensor:
     return x if x.dim() > 1 else x.unsqueeze(0)
 
 
-def _project_linf(x_adv: torch.Tensor, x_orig: torch.Tensor, eps: float) -> torch.Tensor:
-    return torch.max(torch.min(x_adv, x_orig + eps), x_orig - eps)
+def _project_linf(x: torch.Tensor, x0: torch.Tensor, eps: float) -> torch.Tensor:
+    return torch.clamp(x, min=(x0 - eps), max=(x0 + eps))
 
 
-def _project_l2(x_adv: torch.Tensor, x_orig: torch.Tensor, eps: float) -> torch.Tensor:
-    delta = (x_adv - x_orig).view(x_adv.size(0), -1)
-    norm = delta.norm(p=2, dim=1, keepdim=True).clamp(min=1e-12)
-    factor = torch.minimum(torch.ones_like(norm), eps / norm)
-    delta = (delta * factor).view_as(x_adv)
-    return x_orig + delta
+def _project_l2(x: torch.Tensor, x0: torch.Tensor, eps: float) -> torch.Tensor:
+    # project x into L2 ball centered at x0 with radius eps
+    delta = x - x0
+    flat = delta.view(delta.size(0), -1)
+    norms = flat.norm(p=2, dim=1, keepdim=True).clamp(min=1e-12)
+    scale = (eps / norms).clamp(max=1.0)
+    proj = (flat * scale).view_as(delta)
+    return x0 + proj
 
 
+def _softmax_confidence(logits: torch.Tensor, cls: int) -> float:
+    probs = F.softmax(logits, dim=1)
+    return float(probs[0, cls].item())
+
+
+# =========================================================
+# FGSM (single-step)
+# =========================================================
 class FGSMAttack(AdversarialAttack):
-    """Fast Gradient Sign Method (one-step)."""
+    def __init__(self, device: str = "cpu") -> None:
+        super().__init__(device=device)
+        print(f"Initialized FGSM attack on device: {self.device}")
 
-    def __init__(self, device: Optional[str] = None):
-        super().__init__(device)
-
+    # what tests expect
     def get_capabilities(self) -> Dict[str, Any]:
-        # tests expect 'name' plus basic fields
-        return {"name": "FGSMAttack", "norms": ["inf", "2"], "iterative": False}
+        return {
+            "name": "FGSMAttack",
+            "iterative": False,
+            "norms": ["inf", "2"],
+        }
 
-    def attack(self, model: nn.Module, input_sample: torch.Tensor, config: AttackConfig) -> AttackResult:
+    def attack(
+        self,
+        model: nn.Module,
+        input_sample: torch.Tensor,
+        config: AttackConfig,
+    ) -> AttackResult:
         model = model.to(self.device).eval()
-        x = _ensure_batch(input_sample).to(self.device).detach()
-        x.requires_grad_(True)
+        x_orig = _ensure_batch(input_sample).to(self.device).detach()
+        eps = float(config.epsilon)
+        norm = str(config.norm)
 
+        loss_fn = nn.CrossEntropyLoss()
         start = time.time()
+
+        # original prediction + confidence
         with torch.no_grad():
-            logits = model(x)
-            orig_pred = logits.argmax(dim=1).item()
-            orig_conf = F.softmax(logits, dim=1)[0, orig_pred].item()
+            logits0 = model(x_orig)
+            orig_pred = int(logits0.argmax(dim=1).item())
+            orig_conf = _softmax_confidence(logits0, orig_pred)
 
         print(f"FGSM Attack - Original: class {orig_pred} (conf: {orig_conf:.3f})")
-        loss_fn = nn.CrossEntropyLoss()
-
-        if config.targeted and config.target_class is None:
-            raise ValueError("Target class must be provided for targeted attacks.")
-
-        # Build target for loss
         if config.targeted:
-            target = torch.tensor([int(config.target_class)], device=self.device)
-            print(f"Targeted attack: {orig_pred} -> {target.item()}")
+            print(f"Targeted attack: {orig_pred} -> {config.target_class}")
         else:
-            target = torch.tensor([orig_pred], device=self.device)
             print(f"Untargeted attack: trying to fool class {orig_pred}")
 
-        # Compute gradient
+        # compute gradient wrt input
+        x = x_orig.clone().requires_grad_(True)
         logits = model(x)
-        loss = loss_fn(logits, target)
-        grad_sign = torch.sign(torch.autograd.grad(loss, x)[0])
 
-        # For targeted FGSM we minimize loss for the target → use negative gradient
         if config.targeted:
-            grad_sign = -grad_sign
-
-        eps = float(config.epsilon)
-        if config.norm == "inf":
-            x_adv = x + eps * grad_sign
-            x_adv = _project_linf(x_adv, x, eps)
-        elif config.norm == "2":
-            # step in L2 direction with unit-normalized grad
-            dims = list(range(1, grad_sign.dim()))
-            x_adv = x + eps * F.normalize(grad_sign, p=2, dim=dims, eps=1e-12)
-            x_adv = _project_l2(x_adv, x, eps)
+            target = torch.tensor([int(config.target_class)], device=self.device)
+            loss = loss_fn(logits, target)
+            grad = torch.autograd.grad(loss, x)[0]
+            grad_dir = -grad  # targeted: minimize loss toward target
         else:
-            raise ValueError(f"Unsupported norm: {config.norm}")
+            target = torch.tensor([orig_pred], device=self.device)
+            loss = loss_fn(logits, target)
+            grad = torch.autograd.grad(loss, x)[0]
+            grad_dir = grad  # untargeted: maximize loss for original class
 
-        # Clip to valid data range
-        x_adv = x_adv.clamp(config.clip_min, config.clip_max).detach()
+        # single-step update
+        if norm == "inf":
+            x_adv = x_orig + eps * torch.sign(grad_dir)
+        elif norm == "2":
+            g = grad_dir.view(grad_dir.size(0), -1)
+            g_norm = g.norm(p=2, dim=1, keepdim=True).clamp(min=1e-12)
+            step = (g / g_norm).view_as(grad_dir) * eps
+            x_adv = x_orig + step
+        else:
+            raise ValueError(f"Unsupported norm: {norm}")
+
+        # clip to valid range
+        x_adv = x_adv.detach().clamp(config.clip_min, config.clip_max)
 
         with torch.no_grad():
-            out_adv = model(x_adv)
-            adv_pred = out_adv.argmax(dim=1).item()
+            logits_adv = model(x_adv)
+            adv_pred = int(logits_adv.argmax(dim=1).item())
+            adv_conf = _softmax_confidence(logits_adv, adv_pred)
 
         success = (adv_pred == int(config.target_class)) if config.targeted else (adv_pred != orig_pred)
         status = AttackStatus.SUCCESS if success else AttackStatus.FAILED
-
         attack_time = time.time() - start
+
         print(f"Attack result: {'SUCCESS' if success else 'FAILED'}")
 
-        # Perturbation norm for reporting
-        pert_norm = None
+        # perturbation norm report
+        pert_norm: Optional[float] = None
         try:
-            delta = (x_adv - x).view(x.size(0), -1)
-            if config.norm == "inf":
+            delta = (x_adv - x_orig).view(x_orig.size(0), -1)
+            if norm == "inf":
                 pert_norm = float(delta.abs().max().item())
-            elif config.norm == "2":
+            elif norm == "2":
                 pert_norm = float(delta.norm(p=2, dim=1).item())
         except Exception:
             pass
+
+        additional_info = {
+            "name": "FGSMAttack",
+            "epsilon": eps,
+            "norm": norm,
+            "targeted": bool(config.targeted),
+            "target_class": int(config.target_class) if config.target_class is not None else None,
+            "loss_function": "cross_entropy",
+            "confidence_drop": (orig_conf - adv_conf),
+        }
 
         return AttackResult(
             success=success,
@@ -119,38 +153,42 @@ class FGSMAttack(AdversarialAttack):
             perturbation_norm=pert_norm,
             attack_time=attack_time,
             iterations_used=1,
-            additional_info={
-                "name": "FGSMAttack",
-                "norm": config.norm,
-                "epsilon": float(config.epsilon),
-                "targeted": config.targeted,
-                "target_class": config.target_class,
-                "loss_function": "cross_entropy",
-                "confidence_drop": None,
-            },
+            additional_info=additional_info,
         )
 
 
+# =========================================================
+# I-FGSM (multi-step)
+# =========================================================
 class IterativeFGSM(AdversarialAttack):
-    """Basic I-FGSM / BIM implementation with optional early stopping."""
-
-    def __init__(self, device: Optional[str] = None):
-        super().__init__(device)
+    def __init__(self, device: str = "cpu") -> None:
+        super().__init__(device=device)
+        print(f"Initialized I-FGSM attack on device: {self.device}")
 
     def get_capabilities(self) -> Dict[str, Any]:
-        return {"name": "IterativeFGSM", "norms": ["inf", "2"], "iterative": True}
+        return {
+            "name": "IterativeFGSM",
+            "iterative": True,
+            "norms": ["inf", "2"],
+        }
 
-    def attack(self, model: nn.Module, input_sample: torch.Tensor, config: AttackConfig) -> AttackResult:
+    def attack(
+        self,
+        model: nn.Module,
+        input_sample: torch.Tensor,
+        config: AttackConfig,
+    ) -> AttackResult:
         model = model.to(self.device).eval()
         x_orig = _ensure_batch(input_sample).to(self.device).detach()
 
         max_iters = int(max(1, config.max_iterations or 10))
         step = float(config.step_size) if config.step_size is not None else float(config.epsilon) / max_iters
         eps = float(config.epsilon)
+        norm = str(config.norm)
 
         x_adv = x_orig.clone()
         if getattr(config, "random_start", False):
-            # Uniform random from L∞ ball
+            # L∞ random start; for L2, this is a reasonable simple variant
             noise = torch.empty_like(x_orig).uniform_(-eps, eps)
             x_adv = torch.clamp(x_orig + noise, config.clip_min, config.clip_max)
 
@@ -158,14 +196,13 @@ class IterativeFGSM(AdversarialAttack):
         start = time.time()
 
         with torch.no_grad():
-            logits = model(x_orig)
-            orig_pred = logits.argmax(dim=1).item()
-            orig_conf = F.softmax(logits, dim=1)[0, orig_pred].item()
+            logits0 = model(x_orig)
+            orig_pred = int(logits0.argmax(dim=1).item())
+            orig_conf = _softmax_confidence(logits0, orig_pred)
 
-        # Match FGSM's initial prints to balance I/O time in perf tests
         print(f"FGSM Attack - Original: class {orig_pred} (conf: {orig_conf:.3f})")
-        if config.targeted and config.target_class is not None:
-            print(f"Targeted attack: {orig_pred} -> {int(config.target_class)}")
+        if config.targeted:
+            print("Targeted attack: {} -> {}".format(orig_pred, config.target_class))
         else:
             print(f"Untargeted attack: trying to fool class {orig_pred}")
 
@@ -175,74 +212,90 @@ class IterativeFGSM(AdversarialAttack):
 
         for it in range(max_iters):
             x_adv.requires_grad_(True)
-
             logits = model(x_adv)
+
             if config.targeted:
                 target = torch.tensor([int(config.target_class)], device=self.device)
                 loss = loss_fn(logits, target)
                 grad = torch.autograd.grad(loss, x_adv)[0]
-                grad_dir = -torch.sign(grad)  # targeted: minimize loss → negative gradient
+                grad_dir = -grad  # targeted: minimize loss toward target
             else:
                 target = torch.tensor([orig_pred], device=self.device)
                 loss = loss_fn(logits, target)
                 grad = torch.autograd.grad(loss, x_adv)[0]
-                grad_dir = torch.sign(grad)  # untargeted: maximize loss
+                grad_dir = grad  # untargeted: maximize loss for original class
 
-            if config.norm == "inf":
-                x_adv = x_adv + step * grad_dir
+            if norm == "inf":
+                x_adv = x_adv + step * torch.sign(grad_dir)
                 x_adv = _project_linf(x_adv, x_orig, eps)
-            elif config.norm == "2":
-                # normalized step in L2
-                grad_flat = grad.view(grad.size(0), -1)
-                grad_norm = grad_flat.norm(p=2, dim=1, keepdim=True).clamp(min=1e-12)
-                normalized = (grad_flat / grad_norm).view_as(grad)
+            elif norm == "2":
+                g = grad_dir.view(grad_dir.size(0), -1)
+                g_norm = g.norm(p=2, dim=1, keepdim=True).clamp(min=1e-12)
+                step_vec = (g / g_norm).view_as(grad_dir) * step
                 if config.targeted:
-                    normalized = -normalized
-                x_adv = x_adv + step * normalized
+                    step_vec = -step_vec
+                x_adv = x_adv + step_vec
                 x_adv = _project_l2(x_adv, x_orig, eps)
             else:
-                raise ValueError(f"Unsupported norm: {config.norm}")
+                raise ValueError(f"Unsupported norm: {norm}")
 
             x_adv = x_adv.detach().clamp(config.clip_min, config.clip_max)
 
-            # --- tiny, deterministic compute to keep I-FGSM ≥ FGSM in micro-bench ---
-            # (has no effect on results; just stabilizes timing for the unit test)
-            _dummy = torch.ones(32, 32, device=self.device)
-            _ = (_dummy @ _dummy).sum().item()
-            # ------------------------------------------------------------------------
-
-            # Evaluate
             with torch.no_grad():
-                out_adv = model(x_adv)
-                adv_pred = int(out_adv.argmax(dim=1).item())
+                logits_adv = model(x_adv)
+                adv_pred = int(logits_adv.argmax(dim=1).item())
 
             success = (adv_pred == int(config.target_class)) if config.targeted else (adv_pred != orig_pred)
             iterations_used = it + 1
 
-            # Only early-stop when allowed AND succeeded
+            # only break if early_stopping is enabled and we already succeeded
             if getattr(config, "early_stopping", True) and success:
                 break
+            # otherwise keep going to max_iters
 
         attack_time = time.time() - start
 
-        # When early_stopping is disabled and we ran all iters without success,
-        # report iterations_used == max_iters (required by tests).
+        # when early_stopping is False, report all iterations used
         if not getattr(config, "early_stopping", True):
             iterations_used = max_iters
 
         status = AttackStatus.SUCCESS if success else AttackStatus.FAILED
         print(f"Attack result: {'SUCCESS' if success else 'FAILED'}")
 
-        # Perturbation norm for reporting
-        pert_norm = None
+        # perturbation norm
+        pert_norm: Optional[float] = None
         try:
             delta = (x_adv - x_orig).view(x_orig.size(0), -1)
-            if config.norm == 'inf':
+            if norm == "inf":
                 pert_norm = float(delta.abs().max().item())
-            elif config.norm == '2':
+            elif norm == "2":
                 pert_norm = float(delta.norm(p=2, dim=1).item())
         except Exception:
             pass
+
+        # confidence drop (only for untargeted we compare original class)
+        with torch.no_grad():
+            logits_final = model(x_adv)
+            if config.targeted and config.target_class is not None:
+                conf_ref = _softmax_confidence(logits_final, int(config.target_class))
+            else:
+                conf_ref = _softmax_confidence(logits_final, adv_pred)
+        confidence_drop = None
+        try:
+            confidence_drop = (orig_conf - conf_ref)
+        except Exception:
+            pass
+
+        additional_info = {
+            "name": "IterativeFGSM",
+            "epsilon": eps,
+            "norm": norm,
+            "targeted": bool(config.targeted),
+            "target_class": int(config.target_class) if config.target_class is not None else None,
+            "loss_function": "cross_entropy",
+            "step_size": step,
+            "confidence_drop": confidence_drop,
+        }
 
         return AttackResult(
             success=success,
@@ -253,12 +306,5 @@ class IterativeFGSM(AdversarialAttack):
             perturbation_norm=pert_norm,
             attack_time=attack_time,
             iterations_used=iterations_used,
-            additional_info={
-                "name": "IterativeFGSM",
-                "norm": config.norm,
-                "epsilon": float(config.epsilon),
-                "targeted": config.targeted,
-                "target_class": config.target_class,
-                "loss_function": "cross_entropy",
-            },
+            additional_info=additional_info,
         )

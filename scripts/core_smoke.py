@@ -1,7 +1,6 @@
 # test_core_verification.py
 """
 Test script for core verification functionality.
-Run this to validate that Step 3-4 implementation is working correctly.
 """
 
 import sys

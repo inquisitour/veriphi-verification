@@ -1,50 +1,111 @@
 #!/usr/bin/env python3
 """
-Summarize CPU baseline results across models, norms, and epsilons.
+Summarize CPU and GPU baseline CSVs.
 
-- Reads all `cpu_baselines_*.csv` in data/baselines/cpu
-- Groups by model, norm, epsilon
-- Computes verification_rate, avg_time, avg_mem
-- Saves a new summary CSV with timestamp
+Reads files like:
+  data/baselines/cpu/cpu_baselines_<ts>.csv
+  data/baselines/gpu/gpu_baselines_<ts>.csv
+
+Writes summaries into:
+  data/baselines/cpu/summary/summary_cpu_baselines_<ts>.csv
+  data/baselines/gpu/summary/summary_gpu_baselines_<ts>.csv
 """
 
-import os
-import glob
+import pathlib
 import pandas as pd
-from datetime import datetime
 
-BASE_DIR = "data/baselines/cpu"
+BASE = pathlib.Path("data/baselines")
+OUT_SUBDIR = "summary"
 
-def main():
-    files = glob.glob(os.path.join(BASE_DIR, "cpu_baselines_*.csv"))
-    if not files:
-        print("No baseline CSVs found in data/baselines/cpu")
+
+def pick_memory_column(df: pd.DataFrame):
+    """Find best matching memory column name."""
+    for name in ["memory_mb", "mem_mb", "memory_usage_mb", "memory_usage", "mem"]:
+        if name in df.columns:
+            return name
+    return None
+
+
+def pick_time_column(df: pd.DataFrame):
+    """Find best matching time column name."""
+    for name in ["verification_time", "time", "elapsed", "runtime_s"]:
+        if name in df.columns:
+            return name
+    return None
+
+
+def summarize_file(path: pathlib.Path):
+    df = pd.read_csv(path)
+
+    # Normalize verification column
+    if "verified" in df.columns:
+        df["verified"] = df["verified"].astype(bool)
+    elif "status" in df.columns:
+        df["verified"] = df["status"].astype(str).str.lower().eq("verified")
+    else:
+        df["verified"] = False
+
+    # Normalize epsilon and norm
+    if "epsilon" not in df.columns and "eps" in df.columns:
+        df["epsilon"] = df["eps"]
+    if "norm" not in df.columns and "p" in df.columns:
+        df["norm"] = df["p"]
+
+    # Memory column
+    mem_col = pick_memory_column(df)
+    if mem_col:
+        df.rename(columns={mem_col: "memory_mb"}, inplace=True)
+    else:
+        df["memory_mb"] = pd.NA
+
+    # Time column
+    time_col = pick_time_column(df)
+    if time_col:
+        df.rename(columns={time_col: "verification_time"}, inplace=True)
+    else:
+        df["verification_time"] = pd.NA
+
+    # Group summary
+    group_cols = ["model", "norm", "epsilon"]
+    ag = df.groupby(group_cols).agg(
+        verification_rate=("verified", "mean"),
+        runs=("verified", "size"),
+        avg_time_s=("verification_time", "mean"),
+        avg_mem_mb=("memory_mb", "mean"),
+    ).reset_index()
+
+    ag["avg_time_s"] = ag["avg_time_s"].fillna(0.0)
+    ag["avg_mem_mb"] = ag["avg_mem_mb"].fillna(0.0)
+
+    return ag
+
+
+def process_dir(kind: str):
+    src_dir = BASE / kind
+    if not src_dir.exists():
+        print(f"Skipping {kind}: no directory {src_dir}")
         return
 
-    print(f"Found {len(files)} baseline file(s).")
-    dfs = [pd.read_csv(f) for f in files]
-    df = pd.concat(dfs, ignore_index=True)
+    csvs = sorted(src_dir.glob(f"{kind}_baselines_*.csv"))
+    if not csvs:
+        print(f"No {kind} baseline CSVs found")
+        return
 
-    summary = (
-        df.groupby(["model", "norm", "epsilon"])
-        .agg(
-            verification_rate=("verified", "mean"),
-            runs=("verified", "count"),
-            avg_time_s=("time_s", "mean"),
-            avg_mem_mb=("memory_usage_mb", "mean"),
-        )
-        .reset_index()
-    )
+    out_dir = src_dir / OUT_SUBDIR
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    ts = int(datetime.now().timestamp())
-    outdir = os.path.join(BASE_DIR, "summary")
-    os.makedirs(outdir, exist_ok=True)
-    out = os.path.join(BASE_DIR, f"summary_cpu_baselines_{ts}.csv")
-    summary.to_csv(out, index=False)
+    for csv in csvs:
+        print("Read:", csv.name)
+        try:
+            summary = summarize_file(csv)
+            out_path = out_dir / f"summary_{csv.name}"
+            summary.to_csv(out_path, index=False)
+            print("Wrote:", out_path)
+        except Exception as e:
+            print(f"ERROR summarizing {csv}: {e}")
 
-    print(f"\nRead:  {len(files)} file(s)")
-    print(f"Wrote: {os.path.basename(out)}\n")
-    print(summary.to_string(index=False))
 
 if __name__ == "__main__":
-    main()
+    process_dir("cpu")
+    process_dir("gpu")
+    print("Done.")
