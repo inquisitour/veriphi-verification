@@ -412,7 +412,6 @@ def main():
         print("   • Enhanced core interface with attacks")
         print("   • Comprehensive robustness evaluation")
         print("   • Performance optimizations")
-        print("\n📋 Ready to proceed with Step 5-6: Test Framework and Validation")
     else:
         print(f"\n⚠️ {total - passed} tests failed")
         print("Please review the errors above and fix the implementation")
