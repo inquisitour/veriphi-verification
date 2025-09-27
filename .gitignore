@@ -41,3 +41,15 @@ auto_LiRPA/
 .pytest_cache/
 .ipynb_checkpoints/
 artifacts/
+
+# Baseline data (ignore raw runs, keep summaries)
+
+# Ignore raw CPU baselines
+data/baselines/cpu/cpu_baselines_*.csv
+
+# Ignore raw GPU baselines
+data/baselines/gpu/gpu_baselines_*.csv
+
+# Track summary outputs
+!data/baselines/cpu/summary/*.csv
+!data/baselines/gpu/summary/*.csv
