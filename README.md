@@ -80,7 +80,7 @@ python -m pytest tests/benchmarks  -q
 
 ---
 
-## 📊 Step 3 — CPU baselines
+## CPU baselines
 
 We keep results under `data/baselines/cpu/` and summaries under `data/baselines/cpu/summary/`.
 
