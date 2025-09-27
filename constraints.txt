@@ -1,0 +1,22 @@
+# Core
+torch==2.3.1+cu121
+# (GPU nodes will use the cu121 index-url; on WSL CPU this still resolves)
+# Optional now, needed later for ResNet loaders:
+torchvision==0.18.1
+torchaudio==2.3.1
+
+# Verification stack
+onnx==1.18.0
+onnxruntime==1.22.1
+# auto-LiRPA pinned to a tag; prefer editable dev install during hacking,
+# but keep this for lock/repro:
+auto-LiRPA @ git+https://github.com/Verified-Intelligence/auto_LiRPA@v0.6.0
+
+# Dev tools (match your verified setup)
+pytest
+black
+isort
+flake8
+numpy
+scipy
+matplotlib

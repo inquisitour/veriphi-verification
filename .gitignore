@@ -38,3 +38,6 @@ auto_LiRPA/
 
 # Additional exclusions
 *:Zone.Identifier
+.pytest_cache/
+.ipynb_checkpoints/
+artifacts/

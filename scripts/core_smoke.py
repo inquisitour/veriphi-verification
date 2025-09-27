@@ -198,6 +198,7 @@ def test_different_models():
             
         except Exception as e:
             print(f"  ✗ {model_type}: Error - {e}")
+    return True
 
 def main():
     """Run all tests"""

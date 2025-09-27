@@ -154,8 +154,8 @@ for eps, stats in results.items():
 ```bash
 # Run comprehensive tests
 python verify_installation.py          # System verification
-python core_test_script.py            # Core functionality
-python test_attack_guided_verification.py  # Attack system
+python scripts/core_smoke.py            # Core functionality
+python scripts/attack_guided_demo.py  # Attack system
 
 # Run specific test suites
 cd tests
@@ -307,3 +307,37 @@ For questions about this implementation or collaboration opportunities:
 - [VNN-COMP](https://sites.google.com/view/vnn2024): International verification competition
 
 ---
+
+### Reproducible install (constraints)
+
+To ensure everyone uses the same toolchain during the hackathon, install with the pinned constraints:
+
+```bash
+# CUDA 12.1 builds (recommended if you have NVIDIA GPUs)
+pip install -r requirements.txt -c constraints.txt   --extra-index-url https://download.pytorch.org/whl/cu121
+
+# CPU-only alternative
+# pip install -r requirements.txt -c constraints.txt #   --index-url https://download.pytorch.org/whl/cpu #   --extra-index-url https://pypi.org/simple
+```
+
+If you develop against the auto-LiRPA sources, we recommend an editable install pinned to v0.6.0:
+
+```bash
+git clone https://github.com/Verified-Intelligence/auto_LiRPA.git
+cd auto_LiRPA
+git checkout v0.6.0
+pip install -e .
+cd ..
+```
+
+You can freeze an exact snapshot when needed:
+```bash
+pip freeze --local > requirements-lock.txt
+```
+
+
+### Script locations
+
+- `scripts/core_smoke.py` – quick smoke tests (moved from `core_test_script.py`)
+- `scripts/attack_guided_demo.py` – demo runner for attack-guided verification (moved from repo root)
+- Full test suites remain under `tests/` and can be run with `pytest` or `run_tests.py`.
