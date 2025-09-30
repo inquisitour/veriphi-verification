@@ -221,7 +221,7 @@ class AttackGuidedEngine(VerificationEngine):
                 "attack_phase_completed": True,
                 "phase_completed": True,
                 "method": "attack-guided",
-                "verification_method": "attack-guided",  # 🔥 added
+                "verification_method": "attack-guided",  
                 "falsified_by": "attack",
                 "attack_name": attack_res.additional_info.get("name", "unknown") if isinstance(attack_res.additional_info, dict) else "unknown",
             },
