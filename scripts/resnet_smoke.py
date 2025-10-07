@@ -7,13 +7,13 @@ ResNet smoke test:
 If formal verification fails (likely on CPU), falls back to FGSM/I-FGSM attack-only.
 """
 
+import os
 import torch
 import traceback
 from core import create_core_system
 from core.models import create_resnet18, create_resnet50
 
-DEVICE = "cpu"  # switch to "cuda" at hackathon if GPU available
-
+DEVICE = os.environ.get("VERIPHI_DEVICE", "cpu")
 
 def run_for_model(name: str, model, x, core):
     print(f"\n🚀 Verifying {name} (ε=0.01, norm=inf)")
@@ -33,7 +33,7 @@ def run_for_model(name: str, model, x, core):
             if hasattr(fgsm_res, "additional_info"):
                 print("  info:", fgsm_res.additional_info)
 
-            ifgsm_res = core.attack_model(model, x, attack_name="i-fgsm", epsilon=0.01, norm="inf", max_iterations=5)
+            ifgsm_res = core.attack_model(model, x, attack_name="i-fgsm", epsilon=0.01, norm="inf")
             print("I-FGSM result:", ifgsm_res.status)
             if hasattr(ifgsm_res, "additional_info"):
                 print("  info:", ifgsm_res.additional_info)

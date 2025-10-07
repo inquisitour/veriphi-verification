@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import time
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -10,10 +11,9 @@ import torch
 
 # --- Optional CPU memory path ---
 try:
-    import psutil, os  # noqa: F401
+    import psutil  # noqa: F401
 except Exception:  # pragma: no cover
     psutil = None  # type: ignore
-    os = None  # type: ignore
 
 from .base import (
     VerificationEngine,
@@ -25,14 +25,14 @@ from .alpha_beta_crown import AlphaBetaCrownEngine
 from ..attacks import (
     AttackConfig,
     AttackResult,
-    AttackStatus,
     create_attack,
+    list_available_attacks,
 )
 
 
 def _cpu_mem_mb() -> Optional[float]:
     """Return current process RSS in MB (CPU path)."""
-    if psutil is None or os is None:
+    if psutil is None:
         return None
     try:
         return psutil.Process(os.getpid()).memory_info().rss / 1024.0 / 1024.0
@@ -56,36 +56,45 @@ class AttackGuidedEngine(VerificationEngine):
     """
 
     def __init__(self, device: Optional[str] = None, attack_timeout: float = 10.0) -> None:
-        self.device = (device or "cpu")
+        # Resolve device from arg or environment variable
+        if device is None:
+            device = os.environ.get("VERIPHI_DEVICE", "cpu")
+        # store torch.device for tensor operations
+        self.device = torch.device(device)
         self.attack_timeout = float(attack_timeout)
 
-        # Formal engine
-        self.formal_engine = AlphaBetaCrownEngine(device=self.device)
+        # Formal engine (pass device as string to factories that expect it)
+        self.formal_engine = AlphaBetaCrownEngine(device=str(self.device))
 
-        # Instantiate default attacks (can be extended)
+        # Instantiate default attacks (device passed as string)
         self.attacks = [
-            create_attack("fgsm", device=self.device),
-            create_attack("i-fgsm", device=self.device),
+            create_attack("fgsm", device=str(self.device)),
+            create_attack("i-fgsm", device=str(self.device)),
         ]
 
-        print(f"Initializing α,β-CROWN verifier on device: {self.device}")
+        print(f"✓ Attack-guided verification engine initialized on {self.device}")
 
     # ------------------------------------------------------------------ #
     # Public API expected by tests
     # ------------------------------------------------------------------ #
     def get_capabilities(self) -> Dict[str, Any]:
-        caps = {}
+        caps: Dict[str, Any] = {}
         try:
             caps.update(self.formal_engine.get_capabilities())
         except Exception:
             pass
 
-        caps["verification_strategy"] = "attack-guided"
-        caps["attack_timeout"] = self.attack_timeout
-        caps["attack_methods"] = ["fgsm", "i-fgsm"]
-        caps["fast_falsification"] = True
-        caps.setdefault("supported_norms", ["inf", "2"])
-        caps.setdefault("bound_methods", ["IBP", "CROWN", "alpha-CROWN"])
+        caps.update(
+            {
+                "verification_strategy": "attack-guided",
+                "attack_timeout": self.attack_timeout,
+                "attack_methods": [a.__class__.__name__ for a in self.attacks],
+                "fast_falsification": True,
+                "norms": ["inf", "2"],
+                "bound_methods": ["IBP", "CROWN", "alpha-CROWN"],
+                "device": str(self.device),
+            }
+        )
         return caps
 
     def verify(self, model: torch.nn.Module, input_sample: torch.Tensor, config: VerificationConfig) -> VerificationResult:
@@ -117,18 +126,32 @@ class AttackGuidedEngine(VerificationEngine):
             early_stopping=True,
         )
 
+        # Move model and input to correct device up front
+        model = model.to(self.device).eval()
+        input_sample = input_sample.to(self.device)
+
         attack_t0 = time.time()
         for attack in self.attacks:
             name = attack.__class__.__name__
             attacks_tried.append(name)
             print(f"      Trying {name}...")
-            res = attack.attack(model, input_sample, atk_cfg)
-            if res.success:
-                print("   ⚠️  Counterexample found by attack; skipping formal verification")
-                attack_success = res
-                break
+            try:
+                res = attack.attack(model, input_sample, atk_cfg)
+            except Exception as e:
+                print(f"      ○ {name} raised an exception during attack: {e}")
+                res = AttackResult(success=False, perturbation=None, additional_info={"error": str(e)})
+
+            # Normalize AttackResult interface (duck-typed)
+            if isinstance(res, AttackResult):
+                if getattr(res, "success", False):
+                    print("   ⚠️  Counterexample found by attack; skipping formal verification")
+                    attack_success = res
+                    break
+                else:
+                    print(f"      ○ {name} failed to find counterexample")
             else:
-                print(f"      ○ {name} failed to find counterexample")
+                # If attack returned unexpected type, treat as failure
+                print(f"      ○ {name} returned unexpected result type; treating as failure")
 
         attack_time = time.time() - attack_t0
         attack_phase_result = "counterexample_found" if attack_success else "no_counterexample_found"
@@ -142,9 +165,10 @@ class AttackGuidedEngine(VerificationEngine):
                 attack_time,
             )
 
+        # --- Proceed to formal verification ---
         print("   ⚡ Attacks completed, proceeding with formal verification...")
 
-        use_cuda = (str(self.device) == "cuda" and torch.cuda.is_available())
+        use_cuda = (self.device.type == "cuda" and torch.cuda.is_available())
         if use_cuda:
             torch.cuda.reset_peak_memory_stats()
             torch.cuda.synchronize()
@@ -152,6 +176,7 @@ class AttackGuidedEngine(VerificationEngine):
         t0 = time.time()
         with contextlib.ExitStack() as stack:
             if use_cuda:
+                # Use autocast for memory/speed improvements if supported
                 stack.enter_context(torch.cuda.amp.autocast(dtype=torch.float16))
             formal_result = self.formal_engine.verify(model, input_sample, config)
 
@@ -165,6 +190,7 @@ class AttackGuidedEngine(VerificationEngine):
         else:
             mem_mb = _cpu_mem_mb()
 
+        # attach timing and memory info
         formal_result.verification_time = dt
         formal_result.memory_usage = mem_mb
         info = dict(formal_result.additional_info or {})
@@ -177,7 +203,7 @@ class AttackGuidedEngine(VerificationEngine):
                 "phase_completed": True,
                 "memory_usage_mb": mem_mb,
                 "method": "attack-guided",
-                "verification_method": "attack-guided",  # 🔥 added
+                "verification_method": "attack-guided",
             }
         )
         formal_result.additional_info = info
@@ -193,9 +219,11 @@ class AttackGuidedEngine(VerificationEngine):
         config: VerificationConfig,
     ) -> List[VerificationResult]:
         """Run attack-guided verification on a batch of inputs."""
-        results = []
+        results: List[VerificationResult] = []
+        # Move model to device once
+        model = model.to(self.device).eval()
         for i in range(inputs.size(0)):
-            x = inputs[i:i+1]
+            x = inputs[i : i + 1].to(self.device)
             res = self.verify_with_attacks(model, x, config)
             results.append(res)
         return results
@@ -209,6 +237,15 @@ class AttackGuidedEngine(VerificationEngine):
         attacks_tried: List[str],
         attack_phase_time: float,
     ) -> VerificationResult:
+        # Extract attack metadata safely
+        falsified_by = "attack"
+        attack_name = "unknown"
+        extra_info = {}
+        if isinstance(attack_res, AttackResult):
+            falsified_by = "attack"
+            extra_info = attack_res.additional_info or {}
+            attack_name = extra_info.get("name", getattr(attack_res, "name", "unknown"))
+
         result = VerificationResult(
             verified=False,
             status=VerificationStatus.FALSIFIED,
@@ -221,9 +258,10 @@ class AttackGuidedEngine(VerificationEngine):
                 "attack_phase_completed": True,
                 "phase_completed": True,
                 "method": "attack-guided",
-                "verification_method": "attack-guided",  
-                "falsified_by": "attack",
-                "attack_name": attack_res.additional_info.get("name", "unknown") if isinstance(attack_res.additional_info, dict) else "unknown",
+                "verification_method": "attack-guided",
+                "falsified_by": falsified_by,
+                "attack_name": attack_name,
+                "attack_additional_info": extra_info,
             },
         )
         result.memory_usage = _cpu_mem_mb()
@@ -232,5 +270,8 @@ class AttackGuidedEngine(VerificationEngine):
 
 # Factory
 def create_attack_guided_engine(device: Optional[str] = None, attack_timeout: float = 10.0) -> AttackGuidedEngine:
-    print("✓ Attack-guided verification engine initialized")
-    return AttackGuidedEngine(device=device or "cpu", attack_timeout=attack_timeout)
+    """Factory that respects VERIPHI_DEVICE if device is not provided."""
+    if device is None:
+        device = os.environ.get("VERIPHI_DEVICE", "cpu")
+    print("✓ Attack-guided verification engine factory creating engine")
+    return AttackGuidedEngine(device=device, attack_timeout=attack_timeout)

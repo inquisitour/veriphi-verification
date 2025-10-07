@@ -18,6 +18,7 @@ from core import create_core_system, VerificationStatus
 from core.models import create_test_model, create_sample_input
 from core.attacks import create_attack, AttackConfig
 
+DEVICE = os.environ.get("VERIPHI_DEVICE", "cpu")
 
 class PerformanceBenchmark:
     """Performance benchmark utilities"""
@@ -57,7 +58,7 @@ class TestVerificationPerformance:
     
     def test_single_verification_timing(self):
         """Benchmark single verification timing"""
-        core = create_core_system(use_attacks=True, device='cpu')
+        core = create_core_system(use_attacks=True, device=DEVICE)
         model = create_test_model("tiny")
         input_sample = create_sample_input("tiny")
         
@@ -77,7 +78,7 @@ class TestVerificationPerformance:
     
     def test_batch_verification_scaling(self):
         """Benchmark batch verification scaling"""
-        core = create_core_system(use_attacks=True, device='cpu')
+        core = create_core_system(use_attacks=True, device=DEVICE)
         model = create_test_model("tiny")
         
         batch_sizes = [1, 2, 4]
@@ -103,7 +104,7 @@ class TestVerificationPerformance:
     
     def test_epsilon_scaling_performance(self):
         """Benchmark performance across different epsilon values"""
-        core = create_core_system(use_attacks=True, device='cpu')
+        core = create_core_system(use_attacks=True, device=DEVICE)
         model = create_test_model("tiny")
         input_sample = create_sample_input("tiny")
         
@@ -142,7 +143,7 @@ class TestAttackPerformance:
         results = {}
         
         for attack_name, config in attack_configs.items():
-            attack = create_attack(attack_name, device='cpu')
+            attack = create_attack(attack_name, device=DEVICE)
             
             def run_attack():
                 return attack.attack(model, input_sample, config)
@@ -171,7 +172,7 @@ class TestAttackPerformance:
         results = {}
         
         for num_iter in iteration_counts:
-            attack = create_attack('i-fgsm', device='cpu')
+            attack = create_attack('i-fgsm', device=DEVICE)
             config = AttackConfig(epsilon=0.3, norm="inf", max_iterations=num_iter, early_stopping=False)
             
             def run_attack():
@@ -203,14 +204,14 @@ class TestAttackGuidedPerformance:
         epsilon = 0.5
         
         # Attack-guided verification
-        core_with_attacks = create_core_system(use_attacks=True, device='cpu')
+        core_with_attacks = create_core_system(use_attacks=True, device=DEVICE)
         def verify_with_attacks():
             return core_with_attacks.verify_robustness(model, input_sample, epsilon=epsilon, timeout=30)
         
         attack_guided_benchmark = PerformanceBenchmark.run_multiple_trials(verify_with_attacks, num_trials=5)
         
         # Pure formal verification
-        core_without_attacks = create_core_system(use_attacks=False, device='cpu')
+        core_without_attacks = create_core_system(use_attacks=False, device=DEVICE)
         def verify_without_attacks():
             return core_without_attacks.verify_robustness(model, input_sample, epsilon=epsilon, timeout=30)
         
@@ -238,7 +239,7 @@ class TestAttackGuidedPerformance:
         
         for timeout in timeout_values:
             from core.verification.attack_guided import AttackGuidedEngine
-            engine = AttackGuidedEngine(device='cpu', attack_timeout=timeout)
+            engine = AttackGuidedEngine(device=DEVICE, attack_timeout=timeout)
             
             from core.verification import VerificationConfig
             config = VerificationConfig(epsilon=0.3, norm="inf", timeout=30)
@@ -270,7 +271,7 @@ class TestMemoryUsage:
         # Baseline memory
         baseline_memory = process.memory_info().rss / 1024 / 1024  # MB
         
-        core = create_core_system(use_attacks=True, device='cpu')
+        core = create_core_system(use_attacks=True, device=DEVICE)
         model = create_test_model("tiny")
         input_sample = create_sample_input("tiny")
         
@@ -298,7 +299,7 @@ class TestMemoryUsage:
         process = psutil.Process(os.getpid())
         baseline_memory = process.memory_info().rss / 1024 / 1024
         
-        core = create_core_system(use_attacks=True, device='cpu')
+        core = create_core_system(use_attacks=True, device=DEVICE)
         model_types = ["tiny", "linear"]
         
         for model_type in model_types:
@@ -323,7 +324,7 @@ def run_comprehensive_benchmark():
     print("=" * 60)
     
     # Model and setup
-    core = create_core_system(use_attacks=True, device='cpu')
+    core = create_core_system(use_attacks=True, device=DEVICE)
     model = create_test_model("tiny")
     input_sample = create_sample_input("tiny")
     

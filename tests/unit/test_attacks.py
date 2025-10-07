@@ -10,6 +10,8 @@ import sys
 import os
 import time
 
+DEFAULT_DEVICE = os.environ.get("VERIPHI_DEVICE", "cpu")
+
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
@@ -101,7 +103,7 @@ class TestFGSMAttack:
     @pytest.fixture
     def attack(self):
         """Create FGSM attack for testing"""
-        return FGSMAttack(device='cpu')
+        return FGSMAttack(device=DEFAULT_DEVICE)
     
     @pytest.fixture
     def simple_model(self):
@@ -116,7 +118,7 @@ class TestFGSMAttack:
     def test_attack_initialization(self, attack):
         """Test attack initialization"""
         assert attack is not None
-        assert attack.device.type == 'cpu'
+        assert attack.device.type == DEFAULT_DEVICE
         
         capabilities = attack.get_capabilities()
         assert capabilities['name'] == 'FGSMAttack'
@@ -196,7 +198,7 @@ class TestIterativeFGSM:
     @pytest.fixture
     def attack(self):
         """Create I-FGSM attack for testing"""
-        return IterativeFGSM(device='cpu')
+        return IterativeFGSM(device=DEFAULT_DEVICE)
     
     @pytest.fixture
     def simple_model(self):
@@ -211,7 +213,7 @@ class TestIterativeFGSM:
     def test_attack_initialization(self, attack):
         """Test attack initialization"""
         assert attack is not None
-        assert attack.device.type == 'cpu'
+        assert attack.device.type == DEFAULT_DEVICE
         
         capabilities = attack.get_capabilities()
         assert capabilities['name'] == 'IterativeFGSM'
@@ -280,20 +282,20 @@ class TestAttackFactory:
     
     def test_create_attack_fgsm(self):
         """Test creating FGSM attack via factory"""
-        attack = create_attack('fgsm', device='cpu')
+        attack = create_attack('fgsm', device=DEFAULT_DEVICE)
         assert isinstance(attack, FGSMAttack)
-        assert attack.device.type == 'cpu'
+        assert attack.device.type == DEFAULT_DEVICE
     
     def test_create_attack_ifgsm(self):
         """Test creating I-FGSM attack via factory"""
-        attack = create_attack('i-fgsm', device='cpu')
+        attack = create_attack('i-fgsm', device=DEFAULT_DEVICE)
         assert isinstance(attack, IterativeFGSM)
-        assert attack.device.type == 'cpu'
+        assert attack.device.type == DEFAULT_DEVICE
     
     def test_create_attack_invalid(self):
         """Test creating invalid attack"""
         with pytest.raises(ValueError):
-            create_attack('invalid_attack', device='cpu')
+            create_attack('invalid_attack', device=DEFAULT_DEVICE)
 
 
 class TestAttackMetrics:
@@ -372,7 +374,7 @@ def test_complete_attack_workflow():
     
     results = []
     for attack_name, config in attack_configs:
-        attack = create_attack(attack_name, device='cpu')
+        attack = create_attack(attack_name, device=DEFAULT_DEVICE)
         result = attack.attack(model, input_sample, config)
         results.append(result)
         

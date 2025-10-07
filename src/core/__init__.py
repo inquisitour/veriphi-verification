@@ -1,7 +1,10 @@
 from __future__ import annotations
-
+import os
 from typing import List, Optional, Any
 import torch
+
+# --- Default device setup ---
+DEFAULT_DEVICE = os.environ.get("VERIPHI_DEVICE", "cpu")
 
 # Verification
 from .verification.base import (
@@ -55,62 +58,92 @@ class _StatusCompat:
 
 
 class VeriphiCore:
-    def __init__(self, use_attacks: bool = True, device: str = "cpu", attack_timeout: float = 10.0):
+    def __init__(self, use_attacks: bool = True, device: Optional[str] = None, attack_timeout: float = 10.0):
+        self.device = device or DEFAULT_DEVICE
         self.use_attacks = use_attacks
-        self.device = device
         self.attack_timeout = attack_timeout
-        if use_attacks:
-            self.engine = create_attack_guided_engine(device, attack_timeout)
-            print("✓ Attack-guided verification engine initialized")
-        else:
-            self.engine = AlphaBetaCrownEngine(device)
-            print("✓ Formal verification engine initialized")
 
-    def verify_robustness(self, model: torch.nn.Module, input_sample: torch.Tensor,
-                          epsilon: float = 0.1, norm: str = "inf", timeout: int = 300,
-                          bound_method: str = "CROWN") -> VerificationResult:
+        if use_attacks:
+            self.engine = create_attack_guided_engine(self.device, attack_timeout)
+            print(f"✓ Attack-guided verification engine initialized on {self.device}")
+        else:
+            self.engine = AlphaBetaCrownEngine(self.device)
+            print(f"✓ Formal verification engine initialized on {self.device}")
+
+    def verify_robustness(
+        self,
+        model: torch.nn.Module,
+        input_sample: torch.Tensor,
+        epsilon: float = 0.1,
+        norm: str = "inf",
+        timeout: int = 300,
+        bound_method: str = "CROWN",
+    ) -> VerificationResult:
         config = VerificationConfig(
-            epsilon=epsilon, norm=norm, timeout=timeout,
-            method="alpha-beta-crown", bound_method=bound_method
+            epsilon=epsilon,
+            norm=norm,
+            timeout=timeout,
+            method="alpha-beta-crown",
+            bound_method=bound_method,
         )
         if hasattr(self.engine, "verify_with_attacks"):
-            return self.engine.verify_with_attacks(model, input_sample, config)
-        return self.engine.verify(model, input_sample, config)
+            return self.engine.verify_with_attacks(model, input_sample.to(self.device), config)
+        return self.engine.verify(model, input_sample.to(self.device), config)
 
-    def verify_batch(self, model: torch.nn.Module, input_samples: torch.Tensor,
-                     epsilon: float = 0.1, norm: str = "inf", timeout: int = 300) -> List[VerificationResult]:
+    def verify_batch(
+        self,
+        model: torch.nn.Module,
+        input_samples: torch.Tensor,
+        epsilon: float = 0.1,
+        norm: str = "inf",
+        timeout: int = 300,
+    ) -> List[VerificationResult]:
         config = VerificationConfig(
-            epsilon=epsilon, norm=norm,
+            epsilon=epsilon,
+            norm=norm,
             timeout=timeout // max(1, int(input_samples.shape[0])),
             method="alpha-beta-crown",
         )
         if hasattr(self.engine, "verify_batch_with_attacks"):
-            return self.engine.verify_batch_with_attacks(model, input_samples, config)
-        return self.engine.verify_batch(model, input_samples, config)
+            return self.engine.verify_batch_with_attacks(model, input_samples.to(self.device), config)
+        return self.engine.verify_batch(model, input_samples.to(self.device), config)
 
-    def attack_model(self, model: torch.nn.Module, input_sample: torch.Tensor,
-                     attack_name: str = "fgsm", epsilon: float = 0.1, norm: str = "inf",
-                     targeted: bool = False, target_class: Optional[int] = None) -> AttackResult:
+    def attack_model(
+        self,
+        model: torch.nn.Module,
+        input_sample: torch.Tensor,
+        attack_name: str = "fgsm",
+        epsilon: float = 0.1,
+        norm: str = "inf",
+        targeted: bool = False,
+        target_class: Optional[int] = None,
+    ) -> AttackResult:
         attack = create_attack(attack_name, self.device)
         config = AttackConfig(
-            epsilon=epsilon, norm=norm,
-            targeted=targeted, target_class=target_class,
+            epsilon=epsilon,
+            norm=norm,
+            targeted=targeted,
+            target_class=target_class,
             max_iterations=20,
         )
-        result = attack.attack(model, input_sample, config)
-        # Make status work with both test styles
+        result = attack.attack(model.to(self.device), input_sample.to(self.device), config)
         result.status = _StatusCompat(result.status)
         return result
 
-    def evaluate_robustness(self, model: torch.nn.Module, test_inputs: torch.Tensor,
-                            epsilons: List[float] = [0.01, 0.05, 0.1, 0.2], norm: str = "inf") -> dict:
+    def evaluate_robustness(
+        self,
+        model: torch.nn.Module,
+        test_inputs: torch.Tensor,
+        epsilons: List[float] = [0.01, 0.05, 0.1, 0.2],
+        norm: str = "inf",
+    ) -> dict:
         results = {}
-        print(f"🔍 Evaluating robustness across {len(epsilons)} epsilon values")
+        print(f"🔍 Evaluating robustness across {len(epsilons)} epsilon values on {self.device}")
         print(f"   Test samples: {test_inputs.shape[0]}")
         print(f"   Epsilons: {epsilons}")
         for eps in epsilons:
             print(f"\n📊 Testing ε = {eps}")
-            verification_results = self.verify_batch(model, test_inputs, epsilon=eps, norm=norm, timeout=60)
+            verification_results = self.verify_batch(model, test_inputs.to(self.device), epsilon=eps, norm=norm, timeout=60)
             total_samples = len(verification_results)
             verified_count = sum(1 for r in verification_results if r.verified)
             falsified_count = sum(1 for r in verification_results if r.status == VerificationStatus.FALSIFIED)
@@ -136,21 +169,27 @@ class VeriphiCore:
 
     def get_capabilities(self) -> dict:
         caps = self.engine.get_capabilities()
-        caps.update({
-            "attack_support": self.use_attacks,
-            "available_attacks": list_available_attacks(),
-            "batch_verification": True,
-            "robustness_evaluation": True,
-        })
+        caps.update(
+            {
+                "attack_support": self.use_attacks,
+                "available_attacks": list_available_attacks(),
+                "batch_verification": True,
+                "robustness_evaluation": True,
+                "device": self.device,
+            }
+        )
         return caps
 
 
-def create_core_system(use_attacks: bool = True, device: str = "cpu") -> VeriphiCore:
+def create_core_system(use_attacks: bool = True, device: Optional[str] = None) -> VeriphiCore:
+    """Factory for VeriphiCore that respects VERIPHI_DEVICE."""
+    device = device or DEFAULT_DEVICE
     return VeriphiCore(use_attacks=use_attacks, device=device)
 
 
 def quick_robustness_check(model: torch.nn.Module, input_sample: torch.Tensor, epsilon: float = 0.1) -> bool:
-    core = create_core_system(use_attacks=True, device="cpu")
+    """Simple check used in quick smoke tests."""
+    core = create_core_system(use_attacks=True, device=DEFAULT_DEVICE)
     result = core.verify_robustness(model, input_sample, epsilon=epsilon, timeout=30)
     return result.verified
 
@@ -179,4 +218,5 @@ __all__ = [
     "create_model_from_config",
     "MODEL_CONFIGS",
     "create_attack_guided_engine",
+    "DEFAULT_DEVICE",
 ]

@@ -10,6 +10,8 @@ import sys
 import os
 import time
 
+DEFAULT_DEVICE = os.environ.get("VERIPHI_DEVICE", "cpu")
+
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
@@ -91,7 +93,7 @@ class TestAlphaBetaCrownEngine:
     @pytest.fixture
     def engine(self):
         """Create verification engine for testing"""
-        return AlphaBetaCrownEngine(device='cpu')
+        return AlphaBetaCrownEngine(device=DEFAULT_DEVICE)
     
     @pytest.fixture
     def simple_model(self):
@@ -106,7 +108,7 @@ class TestAlphaBetaCrownEngine:
     def test_engine_initialization(self, engine):
         """Test engine initialization"""
         assert engine is not None
-        assert engine.device.type == 'cpu'
+        assert engine.device.type == DEFAULT_DEVICE
         
         capabilities = engine.get_capabilities()
         assert 'layers' in capabilities
@@ -198,7 +200,7 @@ class TestVerificationEngineFactory:
     
     def test_create_verification_engine(self):
         """Test engine creation via factory"""
-        engine = create_verification_engine(device='cpu')
+        engine = create_verification_engine(device=DEFAULT_DEVICE)
         
         assert engine is not None
         assert hasattr(engine, 'verify')
@@ -206,8 +208,8 @@ class TestVerificationEngineFactory:
     
     def test_engine_device_setting(self):
         """Test device setting in engine creation"""
-        engine = create_verification_engine(device='cpu')
-        assert engine.device.type == 'cpu'
+        engine = create_verification_engine(device=DEFAULT_DEVICE)
+        assert engine.device.type == DEFAULT_DEVICE
 
 
 class TestModelInfo:
@@ -233,7 +235,7 @@ class TestModelInfo:
 def test_complete_verification_workflow():
     """Test complete verification workflow"""
     # Create components
-    engine = AlphaBetaCrownEngine(device='cpu')
+    engine = AlphaBetaCrownEngine(device=DEFAULT_DEVICE)
     model = create_test_model("tiny")
     input_sample = create_sample_input("tiny")
     

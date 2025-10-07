@@ -9,6 +9,8 @@ import sys
 import os
 import time
 
+DEFAULT_DEVICE = os.environ.get("VERIPHI_DEVICE", "cpu")
+
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
@@ -26,7 +28,7 @@ class TestAttackGuidedEngine:
     @pytest.fixture
     def engine(self):
         """Create attack-guided engine for testing"""
-        return AttackGuidedEngine(device='cpu', attack_timeout=5.0)
+        return AttackGuidedEngine(device=DEFAULT_DEVICE, attack_timeout=5.0)
     
     @pytest.fixture
     def simple_model(self):
@@ -41,7 +43,7 @@ class TestAttackGuidedEngine:
     def test_engine_initialization(self, engine):
         """Test attack-guided engine initialization"""
         assert engine is not None
-        assert engine.device == 'cpu'
+        assert str(engine.device) == DEFAULT_DEVICE
         assert engine.attack_timeout == 5.0
         assert len(engine.attacks) > 0
         
@@ -85,7 +87,7 @@ class TestAttackGuidedEngine:
     
     def test_attack_phase_timeout(self, simple_model, sample_input):
         """Test attack phase timeout handling"""
-        engine = AttackGuidedEngine(device='cpu', attack_timeout=1.0)  # Very short timeout
+        engine = AttackGuidedEngine(device=DEFAULT_DEVICE, attack_timeout=1.0)  # Very short timeout
         from core.verification import VerificationConfig
         
         config = VerificationConfig(epsilon=0.3, norm="inf", timeout=15)
@@ -122,12 +124,12 @@ class TestVeriphiCore:
     @pytest.fixture
     def core_with_attacks(self):
         """Create core system with attacks enabled"""
-        return VeriphiCore(use_attacks=True, device='cpu')
+        return VeriphiCore(use_attacks=True, device=DEFAULT_DEVICE)
     
     @pytest.fixture
     def core_without_attacks(self):
         """Create core system without attacks"""
-        return VeriphiCore(use_attacks=False, device='cpu')
+        return VeriphiCore(use_attacks=False, device=DEFAULT_DEVICE)
     
     @pytest.fixture
     def simple_model(self):
@@ -240,7 +242,7 @@ class TestDifferentModelArchitectures:
     @pytest.fixture
     def core(self):
         """Create core system for testing"""
-        return create_core_system(use_attacks=True, device='cpu')
+        return create_core_system(use_attacks=True, device=DEFAULT_DEVICE)
     
     @pytest.mark.parametrize("model_type", ["tiny", "linear"])
     def test_different_models(self, core, model_type):
@@ -286,7 +288,7 @@ class TestPerformanceCharacteristics:
     @pytest.fixture
     def core(self):
         """Create core system for testing"""
-        return create_core_system(use_attacks=True, device='cpu')
+        return create_core_system(use_attacks=True, device=DEFAULT_DEVICE)
     
     def test_verification_time_scaling(self, core):
         """Test that verification time scales reasonably"""
@@ -319,7 +321,7 @@ class TestPerformanceCharacteristics:
         input_sample = create_sample_input("tiny")
         
         # Attack-guided verification
-        core_with_attacks = create_core_system(use_attacks=True, device='cpu')
+        core_with_attacks = create_core_system(use_attacks=True, device=DEFAULT_DEVICE)
         start_time = time.time()
         result_attacks = core_with_attacks.verify_robustness(
             model, input_sample, epsilon=0.3, timeout=15
@@ -327,7 +329,7 @@ class TestPerformanceCharacteristics:
         time_with_attacks = time.time() - start_time
         
         # Pure formal verification
-        core_without_attacks = create_core_system(use_attacks=False, device='cpu')
+        core_without_attacks = create_core_system(use_attacks=False, device=DEFAULT_DEVICE)
         start_time = time.time()
         result_formal = core_without_attacks.verify_robustness(
             model, input_sample, epsilon=0.3, timeout=15
@@ -349,11 +351,11 @@ class TestFactoryFunctions:
     def test_create_core_system(self):
         """Test core system factory function"""
         # With attacks
-        core_attacks = create_core_system(use_attacks=True, device='cpu')
+        core_attacks = create_core_system(use_attacks=True, device=DEFAULT_DEVICE)
         assert core_attacks.use_attacks is True
         
         # Without attacks
-        core_no_attacks = create_core_system(use_attacks=False, device='cpu')
+        core_no_attacks = create_core_system(use_attacks=False, device=DEFAULT_DEVICE)
         assert core_no_attacks.use_attacks is False
     
     def test_quick_robustness_check(self):
@@ -376,7 +378,7 @@ def test_complete_end_to_end_workflow():
     print("\n🚀 Running complete end-to-end workflow test...")
     
     # 1. Create system
-    core = create_core_system(use_attacks=True, device='cpu')
+    core = create_core_system(use_attacks=True, device=DEFAULT_DEVICE)
     
     # 2. Create model and input
     model = create_test_model("tiny")

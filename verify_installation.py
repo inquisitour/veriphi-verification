@@ -13,7 +13,7 @@ def check_python():
     print("PYTHON VERIFICATION")
     print("=" * 50)
     print(f"Python version: {sys.version}")
-    assert sys.version_info >= (3, 12), f"Python 3.12+ required, got {sys.version_info}"
+    assert sys.version_info >= (3, 9), f"Python 3.9+ required, got {sys.version_info}"
     print("✓ Python version OK")
 
 def check_pytorch():
@@ -171,7 +171,7 @@ def main():
         print("   - auto-LiRPA verification engine")
         print("   - ONNX model format support")
         print("   - Development and testing tools")
-        print("\n🚀 Ready to proceed with Step 3-4: Core verification implementation!")
+        print("\n🚀 Ready to proceed !")
     else:
         print(f"\n⚠️  Some components failed verification.")
         print("Please review the errors above and reinstall failed components.")

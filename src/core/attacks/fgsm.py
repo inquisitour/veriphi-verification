@@ -45,7 +45,7 @@ def _softmax_confidence(logits: torch.Tensor, cls: int) -> float:
 # FGSM (single-step)
 # =========================================================
 class FGSMAttack(AdversarialAttack):
-    def __init__(self, device: str = "cpu") -> None:
+    def __init__(self, device: str | None = None) -> None:
         super().__init__(device=device)
         print(f"Initialized FGSM attack on device: {self.device}")
 
@@ -161,7 +161,7 @@ class FGSMAttack(AdversarialAttack):
 # I-FGSM (multi-step)
 # =========================================================
 class IterativeFGSM(AdversarialAttack):
-    def __init__(self, device: str = "cpu") -> None:
+    def __init__(self, device: str | None = None) -> None:
         super().__init__(device=device)
         print(f"Initialized I-FGSM attack on device: {self.device}")
 

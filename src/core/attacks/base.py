@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any
 import torch
 from enum import Enum
+import os
 
 class AttackStatus(Enum):
     """Status codes for attack results"""
@@ -79,9 +80,8 @@ class AdversarialAttack(ABC):
             device: Device to run on ('cpu', 'cuda', or None for auto-detection)
         """
         if device is None:
-            self.device = torch.device('cpu')  # Default to CPU for our setup
-        else:
-            self.device = torch.device(device)
+            device = os.environ.get("VERIPHI_DEVICE", "cpu")
+        self.device = torch.device(device)
     
     @abstractmethod
     def attack(self, model: torch.nn.Module, input_tensor: torch.Tensor, 

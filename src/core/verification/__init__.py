@@ -5,6 +5,8 @@ Neural Network Verification Module
 This module provides core verification functionality using α,β-CROWN algorithm
 via the auto-LiRPA library.
 """
+import os
+DEFAULT_DEVICE = os.environ.get("VERIPHI_DEVICE", "cpu")
 
 from .base import (
     VerificationEngine, 
@@ -40,6 +42,7 @@ __all__ = [
 __version__ = '0.1.0'
 
 # Default engine factory
-def get_default_engine(device: str = 'cpu') -> VerificationEngine:
+def get_default_engine(device: str | None = None) -> VerificationEngine:
     """Get the default verification engine"""
+    device = device or DEFAULT_DEVICE
     return create_verification_engine(device=device, optimized=False)

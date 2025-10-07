@@ -1,7 +1,7 @@
 # test_attack_guided_verification.py
 """
 Comprehensive test script for attack-guided verification functionality.
-Tests Step 7-8 implementation: Adversarial Attacks Integration.
+Tests Adversarial Attacks Integration.
 """
 
 import sys
@@ -11,6 +11,8 @@ import time
 
 # Add src to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+DEVICE = os.environ.get("VERIPHI_DEVICE", "cpu")
 
 def test_attack_imports():
     """Test attack component imports"""
@@ -41,8 +43,8 @@ def test_attack_creation():
     
     try:
         # Test factory function
-        fgsm = create_attack('fgsm', device='cpu')
-        ifgsm = create_attack('i-fgsm', device='cpu')
+        fgsm = create_attack('fgsm', DEVICE)
+        ifgsm = create_attack('i-fgsm', DEVICE)
         
         print(f"✓ FGSM created: {type(fgsm).__name__}")
         print(f"✓ I-FGSM created: {type(ifgsm).__name__}")
@@ -69,7 +71,7 @@ def test_basic_attacks():
     
     try:
         # Create components
-        attack = FGSMAttack(device='cpu')
+        attack = FGSMAttack(DEVICE)
         model = create_test_model("tiny")
         input_sample = create_sample_input("tiny")
         
@@ -123,7 +125,7 @@ def test_attack_guided_verification():
     
     try:
         # Create components
-        engine = AttackGuidedEngine(device='cpu', attack_timeout=5.0)
+        engine = AttackGuidedEngine(DEVICE, attack_timeout=5.0)
         model = create_test_model("tiny")
         input_sample = create_sample_input("tiny")
         
@@ -186,7 +188,7 @@ def test_enhanced_core_interface():
     
     try:
         # Create enhanced core system
-        core = create_core_system(use_attacks=True, device='cpu')
+        core = create_core_system(use_attacks=True, device=DEVICE)
         model = create_test_model("tiny")
         input_sample = create_sample_input("tiny")
         
@@ -237,7 +239,7 @@ def test_robustness_evaluation():
     
     try:
         # Create system and test data
-        core = create_core_system(use_attacks=True, device='cpu')
+        core = create_core_system(use_attacks=True, device=DEVICE)
         model = create_test_model("tiny")
         
         # Create multiple test samples
@@ -286,7 +288,7 @@ def test_different_attack_methods():
         for attack_name in attack_names:
             print(f"\nTesting {attack_name.upper()}...")
             
-            attack = create_attack(attack_name, device='cpu')
+            attack = create_attack(attack_name, DEVICE)
             result = attack.attack(model, input_sample, config)
             
             print(f"  Status: {result.status.value}")
@@ -325,7 +327,7 @@ def benchmark_attack_vs_verification():
         
         # Pure verification
         print("Pure verification:")
-        pure_engine = AlphaBetaCrownEngine(device='cpu')
+        pure_engine = AlphaBetaCrownEngine(DEVICE)
         start_time = time.time()
         pure_result = pure_engine.verify(model, input_sample, config)
         pure_time = time.time() - start_time
@@ -335,7 +337,7 @@ def benchmark_attack_vs_verification():
         
         # Attack-guided verification
         print("\nAttack-guided verification:")
-        guided_engine = AttackGuidedEngine(device='cpu', attack_timeout=2.0)
+        guided_engine = AttackGuidedEngine(DEVICE, attack_timeout=2.0)
         start_time = time.time()
         guided_result = guided_engine.verify_with_attacks(model, input_sample, config)
         guided_time = time.time() - start_time
@@ -364,7 +366,6 @@ def benchmark_attack_vs_verification():
 def main():
     """Run all attack-guided verification tests"""
     print("🗡️🛡️ Attack-Guided Verification System Tests")
-    print("This script validates the Step 7-8 implementation\n")
     
     tests = [
         ("Attack Imports", test_attack_imports),

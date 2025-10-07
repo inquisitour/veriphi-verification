@@ -47,7 +47,7 @@ def main():
                       f"→ {res.status.value:9s} | {res.verification_time:.3f}s")
 
     # Save results
-    os.makedirs("data/baselines", exist_ok=True)
+    os.makedirs("data/baselines/cpu", exist_ok=True)
     ts = int(time.time())
     fname = f"data/baselines/cpu/cpu_baselines_{ts}.csv"
     with open(fname, "w", newline="") as f:

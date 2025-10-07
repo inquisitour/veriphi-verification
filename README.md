@@ -1,6 +1,6 @@
 # Veriphi: Neural Network Robustness Verification
 
-A compact verification stack that combines **fast adversarial attacks** with **formal bounds (α,β‑CROWN via auto‑LiRPA)**. It answers a simple question:
+A compact verification stack that combines **fast adversarial attacks** with **formal bounds (α,β-CROWN via auto-LiRPA)**. It answers a simple question:
 
 > **“Is this model robust within ε under L∞/L2?”**
 
@@ -20,12 +20,12 @@ python3 -m venv venv
 source venv/bin/activate
 
 # Install (uses pinned constraints; add the extra index for CUDA wheels if you have an NVIDIA GPU)
-pip install -r requirements.txt -c constraints.txt --extra-index-url https://download.pytorch.org/whl/cu121
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121
 # CPU-only alt:
-# pip install -r requirements.txt -c constraints.txt
+# pip install -r requirements.txt
 ```
 
-### (Optional) auto‑LiRPA from source (pinned)
+### (Optional) auto-LiRPA from source (pinned)
 ```bash
 git clone https://github.com/Verified-Intelligence/auto_LiRPA.git
 cd auto_LiRPA
@@ -52,7 +52,7 @@ python scripts/core_smoke.py
 
 A “6/6 tests passed” summary indicates the core stack is healthy.
 
-Minimal one‑liner check:
+Minimal one-liner check:
 ```bash
 python - <<'PY'
 from core import create_core_system
@@ -66,35 +66,88 @@ PY
 
 ---
 
-## 🧪 Tests
+## ⚡ GPU mode
+
+Veriphi now fully supports **CUDA (A100, RTX, etc.)**.
 
 ```bash
-# All tests (unit + integration + benchmarks)
-python -m pytest -q
+# Enable GPU device
+export VERIPHI_DEVICE=cuda
+```
 
-# Or target a suite
-python -m pytest tests/unit    -q
-python -m pytest tests/integration -q
-python -m pytest tests/benchmarks  -q
+All engines, attacks, and models will automatically run on the GPU.
+
+Check GPU availability:
+```bash
+python - <<'PY'
+import torch
+print("CUDA available:", torch.cuda.is_available())
+print("GPUs:", torch.cuda.device_count())
+for i in range(torch.cuda.device_count()):
+    print(f"  GPU {i}:", torch.cuda.get_device_name(i))
+PY
+```
+
+Run a GPU smoke test:
+```bash
+python scripts/gpu_smoke.py
+```
+
+Expected:  
+```
+CUDA available: True
+✓ Attack-guided verification engine initialized on cuda
+Verification result: verified ...
 ```
 
 ---
 
-## 📊 CPU baselines
+## 🧪 Tests
 
-We keep results under `data/baselines/cpu/` and summaries under `data/baselines/cpu/summary/`.
-
-### Generate baselines
 ```bash
-# From repo root
+# All tests (unit + integration + benchmarks)
+export VERIPHI_DEVICE=cuda
+python -m pytest -q
+```
+
+Or target a suite:
+```bash
+pytest tests/unit -q
+pytest tests/integration -q
+pytest tests/benchmarks -q
+```
+
+To run the full verification validation:
+```bash
+export VERIPHI_DEVICE=cuda && python run_tests.py --all --fix-tests
+```
+
+---
+
+## 📊 Baselines
+
+We keep results under:
+- `data/baselines/cpu/` — CPU performance
+- `data/baselines/gpu/` — GPU performance (A100, RTX, etc.)
+
+### Generate CPU baselines
+```bash
 source venv/bin/activate
 export PYTHONPATH="$PWD/src:$PYTHONPATH"
 python scripts/run_cpu_baselines.py
 ```
 
-That will create a file like:
+### Generate GPU baselines
+```bash
+source venv/bin/activate
+export PYTHONPATH="$PWD/src:$PYTHONPATH"
+export VERIPHI_DEVICE=cuda
+python scripts/run_gpu_baselines.py
 ```
-data/baselines/cpu/cpu_baselines_<timestamp>.csv
+
+Each run creates:
+```
+data/baselines/{cpu|gpu}/{cpu|gpu}_baselines_<timestamp>.csv
 ```
 
 ### Summarize baselines
@@ -102,13 +155,10 @@ data/baselines/cpu/cpu_baselines_<timestamp>.csv
 python scripts/summarize_baselines.py
 ```
 
-This reads all `data/baselines/cpu/*.csv` and writes grouped summaries to:
+Writes grouped summaries to:
 ```
-data/baselines/cpu/summary/summary_cpu_baselines_<timestamp>.csv
+data/baselines/{cpu|gpu}/summary/summary_<timestamp>.csv
 ```
-
-Each row includes:
-- `model, norm, epsilon, verification_rate, runs, avg_time_s, avg_mem_mb`
 
 ---
 
@@ -118,18 +168,19 @@ Each row includes:
 src/core/
 ├── verification/
 │   ├── base.py              # Verification interfaces (VerificationEngine, configs, results)
-│   ├── alpha_beta_crown.py  # α,β‑CROWN via auto‑LiRPA
-│   └── attack_guided.py     # Attack‑guided strategy (attacks → formal)
+│   ├── alpha_beta_crown.py  # α,β-CROWN via auto-LiRPA (GPU-aware)
+│   └── attack_guided.py     # Attack-guided strategy (attacks → formal)
 ├── attacks/
 │   ├── base.py              # Attack interfaces + registry
 │   └── fgsm.py              # FGSM + Iterative FGSM
 ├── models/
-│   └── test_models.py       # Tiny/Linear/Conv test models + factories
+│   └── test_models.py       # Tiny/Linear/Conv test models + factories (device-aware)
 └── __init__.py              # VeriphiCore façade (create_core_system, helpers)
 ```
 
 Key ideas:
-- **Attack‑guided**: Try FGSM/I‑FGSM first for fast falsification; if none succeed, run α,β‑CROWN.
+- **Attack-guided**: Try FGSM/I-FGSM first for fast falsification; if none succeed, run α,β-CROWN.
+- **Device-aware**: Controlled globally via `VERIPHI_DEVICE` (`cpu` or `cuda`).
 - **Deterministic**: Seeds + simple toy models for quick iterations.
 - **Extensible**: Add attacks via the registry; add verifiers by implementing the base interface.
 
@@ -138,9 +189,11 @@ Key ideas:
 ## 🖥️ CLI & scripts
 
 - `scripts/core_smoke.py` — verifies imports, simple bounds, and engine contracts.
-- `scripts/attack_guided_demo.py` — shows attack‑guided flow with logging.
-- `scripts/run_cpu_baselines.py` — runs models × norms × ε and writes CSV to `data/baselines/cpu/`.
-- `scripts/summarize_baselines.py` — aggregates all CSVs into grouped summaries under `data/baselines/cpu/summary/`.
+- `scripts/attack_guided_demo.py` — shows attack-guided flow with logging.
+- `scripts/run_cpu_baselines.py` — runs CPU baselines.
+- `scripts/run_gpu_baselines.py` — identical GPU variant.
+- `scripts/resnet_smoke.py` — sanity-checks ResNet-18/50 with attack-guided verifier.
+- `scripts/summarize_baselines.py` — aggregates all CSVs into grouped summaries.
 
 ---
 
@@ -158,17 +211,17 @@ linear   inf    0.050              0.000     1       0.003       440.0
 
 ## 🧭 Roadmap (hackathon)
 
-1) **GPU lift** (Step 4): move tensors/models to CUDA, batch inputs, add AMP around bounds for speed.
-2) **Models that matter** (Step 5): add stubs for ResNet‑18 (CIFAR‑10) and ResNet‑50 (ImageNet).
-3) **Demo scaffolding** (Step 6): minimal web UI — *upload → pick model → ε/norm → verify → report verdict/time/mem*.
+1) ✅ **GPU lift**: full CUDA support with A100 acceleration.
+2) ✅ **Models that matter**: added ResNet-18/50 support stubs.
+3) 🛠️ **Demo scaffolding**: minimal web UI — *upload → pick model → ε/norm → verify → report verdict/time/mem*.
 
 ---
 
 ## 📚 References
 
-- **auto‑LiRPA docs**: https://auto-lirpa.readthedocs.io/
-- **α,β‑CROWN repo**: https://github.com/Verified-Intelligence/alpha-beta-CROWN
-- **VNN‑COMP**: https://sites.google.com/view/vnn2024
+- **auto-LiRPA docs**: https://auto-lirpa.readthedocs.io/
+- **α,β-CROWN repo**: https://github.com/Verified-Intelligence/alpha-beta-CROWN
+- **VNN-COMP**: https://sites.google.com/view/vnn2024
 
 ---
 

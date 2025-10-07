@@ -11,6 +11,8 @@ import time
 # Add src to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
+DEVICE = os.environ.get("VERIPHI_DEVICE", "cpu")
+
 def test_imports():
     """Test that all core components can be imported"""
     print("🧪 Testing Core Imports")
@@ -99,7 +101,7 @@ def test_verification_engine():
     
     try:
         # Create engine
-        engine = create_verification_engine(device='cpu')
+        engine = create_verification_engine(DEVICE)
         print(f"✓ Engine created: {type(engine).__name__}")
         print(f"✓ Device: {engine.get_device()}")
         
@@ -125,7 +127,7 @@ def test_basic_verification():
     
     try:
         # Create components
-        engine = create_verification_engine(device='cpu')
+        engine = create_verification_engine(DEVICE)
         model = create_test_model("tiny")  # Use tiny model for quick testing
         input_sample = create_sample_input("tiny")
         
@@ -179,7 +181,7 @@ def test_different_models():
     from core.verification import create_verification_engine, VerificationConfig
     from core.models import create_test_model, create_sample_input
     
-    engine = create_verification_engine(device='cpu')
+    engine = create_verification_engine(DEVICE)
     config = VerificationConfig(epsilon=0.1, norm="inf", bound_method="IBP", timeout=30)
     
     model_types = ["tiny", "linear"]  # Skip conv for now due to complexity
@@ -202,7 +204,7 @@ def test_different_models():
 def main():
     """Run all tests"""
     print("🧪 Core Verification System Tests")
-    print("This script validates the Step 3-4 implementation\n")
+    print("This script validates the implementation\n")
     
     tests = [
         ("Core Imports", test_imports),
@@ -240,7 +242,6 @@ def main():
     
     if passed == total:
         print("\n🎉 All core verification tests passed!")
-        print("🚀 Ready to proceed with Step 5-6: Test framework and validation")
     else:
         print(f"\n⚠️ {total - passed} tests failed")
         print("Please review the errors above and fix the implementation")
