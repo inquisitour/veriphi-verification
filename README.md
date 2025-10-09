@@ -216,6 +216,7 @@ python scripts/trm_visualize_results.py
 Produces:
 ```
 reports/trm_full_visual_report.pdf
+```
 
 ---
 
@@ -245,6 +246,7 @@ src/core/
 │   ├── resnet_stubs.py      # ResNet‑18/50 demo integration
 │   └── trm_adapter.py       # TRM‑MLP + recursive model adapter
 └── __init__.py              # VeriphiCore façade
+```
 
 ---
 
@@ -267,7 +269,7 @@ Generated visual reports:
 
 ---
 
-## 🧭 Roadmap (Hackathon → Beyond)
+## 🧭 Roadmap
 
 | Stage | Goal | Status |
 |--------|------|--------|
