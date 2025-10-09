@@ -216,17 +216,6 @@ python scripts/trm_visualize_results.py
 Produces:
 ```
 reports/trm_full_visual_report.pdf
-```
-
-### Hackathon Slide (auto PowerPoint)
-```bash
-python scripts/trm_presentation_slide.py
-```
-
-Output:
-```
-reports/trm_hackathon_slide.pptx
-```
 
 ---
 
@@ -275,6 +264,7 @@ Generated visual reports:
 - `trm_compare_bounds_report.pdf`
 - `trm_full_visual_report.pdf`
 - `trm_hackathon_slide.pptx`
+- `trm_hackathon_slide.pdf`
 
 ---
 
