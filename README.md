@@ -245,7 +245,6 @@ src/core/
 │   ├── resnet_stubs.py      # ResNet‑18/50 demo integration
 │   └── trm_adapter.py       # TRM‑MLP + recursive model adapter
 └── __init__.py              # VeriphiCore façade
-```
 
 ---
 
