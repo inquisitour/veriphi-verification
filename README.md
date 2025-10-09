@@ -218,6 +218,14 @@ Produces:
 reports/trm_full_visual_report.pdf
 ```
 
+### UI
+```bash
+chmod +x run_streamlit_safe.sh
+```
+```bash
+./run_streamlit_safe.sh
+```
+
 ---
 
 ## 📊 Example Verified Fractions (TRM, ε = 0.03, L∞)
