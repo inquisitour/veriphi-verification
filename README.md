@@ -218,7 +218,7 @@ Produces:
 reports/trm_full_visual_report.pdf
 ```
 
-### UI
+### Streamlit UI
 ```bash
 chmod +x run_streamlit_safe.sh
 ```
