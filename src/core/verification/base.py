@@ -79,7 +79,7 @@ class VerificationConfig:
             raise ValueError(f"Epsilon must be positive: {self.epsilon}")
         if self.timeout <= 0:
             raise ValueError(f"Timeout must be positive: {self.timeout}")
-        if self.bound_method not in ["IBP", "CROWN", "alpha-CROWN"]:
+        if self.bound_method not in ["IBP", "CROWN", "alpha-CROWN", "beta-CROWN"]:
             raise ValueError(f"Unsupported bound method: {self.bound_method}")
 
 

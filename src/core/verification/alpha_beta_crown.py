@@ -23,25 +23,27 @@ class AlphaBetaCrownEngine(VerificationEngine):
     """α,β-CROWN verification implementation using auto-LiRPA"""
 
     def __init__(self, device: Optional[str] = None):
-        """
-        Initialize α,β-CROWN verifier.
-
-        Args:
-            device: 'cpu', 'cuda', or None to auto-detect / follow VERIPHI_DEVICE
-        """
+        """Initialize α,β-CROWN verifier."""
         # resolve from environment if not given
         if device is None:
             device = os.environ.get("VERIPHI_DEVICE", "cpu")
         self.device = torch.device(device)
         print(f"Initializing α,β-CROWN verifier on device: {self.device}")
 
-        # optimization options
+        # Default optimization settings for both old and new auto-LiRPA APIs
         self.default_bound_opts = {
+            # Newer API (>=0.6.1)
+            "bound_opts": {
+                "optimizer": "adam",
+                "lr_alpha": 0.1,
+                "iteration": 20,
+            },
+            # Legacy API (<=0.6.0)
             "optimize_bound_args": {
                 "optimizer": "adam",
                 "lr": 0.1,
                 "iteration": 20,
-            }
+            },
         }
 
     # ------------------------------------------------------------------
@@ -91,9 +93,7 @@ class AlphaBetaCrownEngine(VerificationEngine):
                 else VerificationStatus.FALSIFIED
             )
 
-            print(
-                f"Verification result: {status.value} (time: {verification_time:.3f}s)"
-            )
+            print(f"Verification result: {status.value} (time: {verification_time:.3f}s)")
 
             return VerificationResult(
                 verified=verified,
@@ -116,14 +116,17 @@ class AlphaBetaCrownEngine(VerificationEngine):
             with contextlib.suppress(Exception):
                 tracemalloc.stop()
             print(f"Verification failed with error: {e}")
+            _, peak_memory = tracemalloc.get_traced_memory()
             return VerificationResult(
                 verified=False,
                 status=VerificationStatus.ERROR,
                 verification_time=verification_time,
+                memory_usage=peak_memory / 1024 / 1024,  # MB
                 additional_info={
                     "error": str(e),
                     "error_type": type(e).__name__,
                     "device": str(self.device),
+                    "perturbation_norm": getattr(config, "norm", None),
                 },
             )
 
@@ -149,28 +152,59 @@ class AlphaBetaCrownEngine(VerificationEngine):
             raise ValueError(f"Unsupported norm: {config.norm}")
 
     def _compute_bounds(
-        self, bounded_model: BoundedModule, bounded_input: BoundedTensor, config: VerificationConfig
+    self, bounded_model: BoundedModule, bounded_input: BoundedTensor, config: VerificationConfig
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         method_map = {
             "IBP": "IBP",
             "CROWN": "backward",
             "alpha-CROWN": "alpha-crown",
+            "beta-CROWN": "beta-crown",
         }
         method = method_map.get(config.bound_method, "alpha-crown")
         print(f"Computing bounds using method: {method}")
 
-        if method == "alpha-crown":
-            lb, ub = bounded_model.compute_bounds(
-                x=(bounded_input,),
-                method="alpha-crown",
-                bound_upper=True,
-                **self.default_bound_opts,
-            )
+        # Universal fallback for different auto-LiRPA API variants
+        if method in ["alpha-crown", "beta-crown"]:
+            try:
+                # 1️⃣ Newest API (>=0.7.x)
+                lb, ub = bounded_model.compute_bounds(
+                    x=(bounded_input,),
+                    method=method,
+                    bound_upper=True,
+                    **{"bound_opts": self.default_bound_opts["bound_opts"]},
+                )
+            except TypeError as e1:
+                try:
+                    # 2️⃣ Mid API (≈0.6.x)
+                    print("⚙️ Falling back to optimize_bound_args API...")
+                    lb, ub = bounded_model.compute_bounds(
+                        x=(bounded_input,),
+                        method=method,
+                        bound_upper=True,
+                        **{"optimize_bound_args": self.default_bound_opts["optimize_bound_args"]},
+                    )
+                except TypeError as e2:
+                    try:
+                        # 3️⃣ Legacy API (≤0.5.x): use simplified backward pass
+                        print("⚙️ Falling back to legacy non-optimized CROWN computation...")
+                        lb, ub = bounded_model.compute_bounds(
+                            x=(bounded_input,),
+                            method="backward",  # old α/β-CROWN fallback
+                            bound_upper=True,
+                        )
+                    except Exception as e3:
+                        raise RuntimeError(
+                            f"All α/β-CROWN bound computation attempts failed:\n"
+                            f"  bound_opts → {e1}\n"
+                            f"  optimize_bound_args → {e2}\n"
+                            f"  backward → {e3}"
+                        )
         else:
             lb, ub = bounded_model.compute_bounds(
-                x=(bounded_input,), method=method, bound_upper=True
+                x=(bounded_input,),
+                method=method,
+                bound_upper=True,
             )
-        return lb, ub
 
     def _check_robustness(
         self, lb: torch.Tensor, ub: torch.Tensor, predicted_class: torch.Tensor
@@ -211,7 +245,7 @@ class AlphaBetaCrownEngine(VerificationEngine):
             "activations": ["ReLU", "Sigmoid", "Tanh"],
             "norms": ["inf", "2"],
             "specifications": ["robustness", "reachability"],
-            "bound_methods": ["IBP", "CROWN", "alpha-CROWN"],
+            "bound_methods": ["IBP", "CROWN", "alpha-CROWN", "beta-CROWN"],
             "max_neurons": 1_000_000,
             "gpu_accelerated": self.device.type == "cuda",
             "supports_batch": False,

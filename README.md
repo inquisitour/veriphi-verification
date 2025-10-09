@@ -1,10 +1,29 @@
-# Veriphi: Neural Network Robustness Verification
+# 🧠 Veriphi: Neural Network Robustness Verification
 
-A compact verification stack that combines **fast adversarial attacks** with **formal bounds (α,β-CROWN via auto-LiRPA)**. It answers a simple question:
+A **GPU‑accelerated verification stack** combining **attack‑guided adversarial search** with **formal bound certification**  
+(α‑, β‑CROWN via [auto‑LiRPA](https://github.com/Verified-Intelligence/auto_LiRPA)).
 
-> **“Is this model robust within ε under L∞/L2?”**
+It answers a simple but critical question:
 
-…and returns **verified / falsified**, with **runtime & memory**. 
+> **“Is this model provably robust within ε under L∞ or L2 perturbations?”**
+
+…and returns **verified / falsified**, with measured **runtime & memory**.
+
+---
+
+## 🚀 New Highlights
+
+✅ **Attack‑Guided Verification:**  
+   Fast falsification via FGSM + I‑FGSM, then formal verification using α‑, β‑CROWN.
+
+✅ **TRM‑MLP Integration:**  
+   Support for **Tiny Recursive Models (TRM)** — verified using the same unified pipeline.
+
+✅ **GPU‑Accelerated Verification:**  
+   Works seamlessly on **A100, RTX** or any CUDA‑enabled GPU.
+
+✅ **Bound Comparison (CROWN vs α‑, β‑CROWN):**  
+   Demonstrates verified fraction improvements through **adversarial training** and **tight bounds**.
 
 ---
 
@@ -19,22 +38,19 @@ cd veriphi-verification
 python3 -m venv venv
 source venv/bin/activate
 
-# Install (uses pinned constraints; add the extra index for CUDA wheels if you have an NVIDIA GPU)
+# Install (use CUDA wheels if you have GPU)
 pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121
-# CPU-only alt:
-# pip install -r requirements.txt
 ```
 
-### (Optional) auto-LiRPA from source (pinned)
+(Optional) install auto‑LiRPA from source:
 ```bash
 git clone https://github.com/Verified-Intelligence/auto_LiRPA.git
-cd auto_LiRPA
-git checkout v0.6.0
+cd auto_LiRPA && git checkout v0.6.0
 pip install -e .
 cd ..
 ```
 
-### Verify your toolchain
+Verify your toolchain:
 ```bash
 python verify_installation.py
 ```
@@ -49,8 +65,6 @@ source venv/bin/activate
 export PYTHONPATH="$PWD/src:$PYTHONPATH"
 python scripts/core_smoke.py
 ```
-
-A “6/6 tests passed” summary indicates the core stack is healthy.
 
 Minimal one-liner check:
 ```bash
@@ -162,69 +176,133 @@ data/baselines/{cpu|gpu}/summary/summary_<timestamp>.csv
 
 ---
 
-## 🏗️ Architecture
+## 🧩 TRM Experiments
+
+### Train TRM‑MLP on MNIST
+```bash
+python scripts/trm_tiny_train.py
+```
+
+### Adversarially Fine‑Tune
+```bash
+python scripts/trm_tiny_advtrain.py
+```
+
+### Verify Robustness (attack + formal)
+```bash
+python scripts/trm_tiny_verify.py
+```
+
+Outputs detailed logs for each ε and produces:
+```
+reports/trm_robustness_report.pdf
+```
+
+### Bound Comparison Sweep
+```bash
+python scripts/trm_tiny_sweep.py
+```
+
+Generates cross‑method comparison:
+- α‑CROWN
+- β‑CROWN
+- CROWN baseline
+
+### Visual Report
+```bash
+python scripts/trm_visualize_results.py
+```
+
+Produces:
+```
+reports/trm_full_visual_report.pdf
+```
+
+### Hackathon Slide (auto PowerPoint)
+```bash
+python scripts/trm_presentation_slide.py
+```
+
+Output:
+```
+reports/trm_hackathon_slide.pptx
+```
+
+---
+
+## 📊 Example Verified Fractions (TRM, ε = 0.03, L∞)
+
+| Bound Method | Avg Verified Fraction |
+|---------------|----------------------:|
+| CROWN         | 0.111 |
+| α‑CROWN       | 0.143 |
+| **β‑CROWN**   | **0.146 ✅** |
+
+---
+
+## 🏗️ Architecture Overview
 
 ```
 src/core/
 ├── verification/
-│   ├── base.py              # Verification interfaces (VerificationEngine, configs, results)
-│   ├── alpha_beta_crown.py  # α,β-CROWN via auto-LiRPA (GPU-aware)
-│   └── attack_guided.py     # Attack-guided strategy (attacks → formal)
+│   ├── base.py              # Verification interfaces + configs
+│   ├── alpha_beta_crown.py  # α,β‑CROWN formal bound engines
+│   └── attack_guided.py     # Orchestrates attacks + verifier
 ├── attacks/
-│   ├── base.py              # Attack interfaces + registry
-│   └── fgsm.py              # FGSM + Iterative FGSM
+│   ├── base.py              # Attack interfaces
+│   └── fgsm.py              # FGSM + iterative FGSM
 ├── models/
-│   └── test_models.py       # Tiny/Linear/Conv test models + factories (device-aware)
-└── __init__.py              # VeriphiCore façade (create_core_system, helpers)
-```
-
-Key ideas:
-- **Attack-guided**: Try FGSM/I-FGSM first for fast falsification; if none succeed, run α,β-CROWN.
-- **Device-aware**: Controlled globally via `VERIPHI_DEVICE` (`cpu` or `cuda`).
-- **Deterministic**: Seeds + simple toy models for quick iterations.
-- **Extensible**: Add attacks via the registry; add verifiers by implementing the base interface.
-
----
-
-## 🖥️ CLI & scripts
-
-- `scripts/core_smoke.py` — verifies imports, simple bounds, and engine contracts.
-- `scripts/attack_guided_demo.py` — shows attack-guided flow with logging.
-- `scripts/run_cpu_baselines.py` — runs CPU baselines.
-- `scripts/run_gpu_baselines.py` — identical GPU variant.
-- `scripts/resnet_smoke.py` — sanity-checks ResNet-18/50 with attack-guided verifier.
-- `scripts/summarize_baselines.py` — aggregates all CSVs into grouped summaries.
-
----
-
-## 📈 Example output (summary)
-
-```
- model  norm  epsilon  verification_rate  runs  avg_time_s  avg_mem_mb
-  tiny   inf    0.050              1.000     1       0.022       439.1
-  tiny     2    0.100              1.000     1       0.024       439.8
-linear   inf    0.050              0.000     1       0.003       440.0
-  conv   inf    0.100              0.000     1       0.003       449.3
+│   ├── test_models.py       # Tiny/Linear/Conv models
+│   ├── resnet_stubs.py      # ResNet‑18/50 demo integration
+│   └── trm_adapter.py       # TRM‑MLP + recursive model adapter
+└── __init__.py              # VeriphiCore façade
 ```
 
 ---
 
-## 🧭 Roadmap (hackathon)
+## 📈 Results Summary
 
-1) ✅ **GPU lift**: full CUDA support with A100 acceleration.
-2) ✅ **Models that matter**: added ResNet-18/50 support stubs.
-3) 🛠️ **Demo scaffolding**: minimal web UI — *upload → pick model → ε/norm → verify → report verdict/time/mem*.
+```
+✅ TRM Adversarially Trained Model
+ε = 0.03, norm = L∞
+verified = 7/10
+falsified = 3/10
+β‑CROWN > α‑CROWN > CROWN
+```
+
+Generated visual reports:
+- `trm_robustness_report.pdf`
+- `trm_compare_bounds_report.pdf`
+- `trm_full_visual_report.pdf`
+- `trm_hackathon_slide.pptx`
+
+---
+
+## 🧭 Roadmap (Hackathon → Beyond)
+
+| Stage | Goal | Status |
+|--------|------|--------|
+| 1️⃣ | CUDA acceleration (A100 verified) | ✅ |
+| 2️⃣ | Add TRM recursive architecture support | ✅ |
+| 3️⃣ | Adversarial + verified robustness training | ✅ |
+| 4️⃣ | Visual + PowerPoint auto‑reporting | ✅ |
+| 5️⃣ | Scale to 7M+ parameter TRM models | 🔜 |
 
 ---
 
 ## 📚 References
 
-- **auto-LiRPA docs**: https://auto-lirpa.readthedocs.io/
-- **α,β-CROWN repo**: https://github.com/Verified-Intelligence/alpha-beta-CROWN
-- **VNN-COMP**: https://sites.google.com/view/vnn2024
+- **auto‑LiRPA Docs:** https://auto-lirpa.readthedocs.io/  
+- **α,β‑CROWN Repo:** https://github.com/Verified-Intelligence/alpha-beta-CROWN  
+- **Tiny Recursive Models:** https://github.com/SamsungSAILMontreal/TinyRecursiveModels  
+- **VNN‑COMP:** https://sites.google.com/view/vnn2024  
 
 ---
 
 ## 📄 License
 
 MIT — see `LICENSE`.
+
+---
+ 
+“*Bridging adversarial testing and formal verification for truly robust neural networks.*”
