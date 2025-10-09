@@ -67,9 +67,9 @@ class VerificationConfig:
     precision: str = "float32"
 
     # Advanced options
-    bound_method: str = "CROWN"  # "IBP", "CROWN", "alpha-CROWN"
-    optimization_steps: int = 20
-    lr: float = 0.01
+    bound_method: str = "beta-CROWN"  # "IBP", "alpha-CROWN", "beta-CROWN"
+    optimization_steps: int = 50
+    lr: float = 0.005
 
     def __post_init__(self):
         """Validate configuration."""
