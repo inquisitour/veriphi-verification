@@ -289,6 +289,13 @@ Generated visual reports:
 
 ---
 
+## ## 📒 Guides
+
+- # [VSC5 Connection Guide (CLI)](./docs/vsc5_connection_readme.md)
+- # [Benchmarking Guide](./docs/trm_scaling_readme.md)
+
+---
+
 ## 📚 References
 
 - **auto‑LiRPA Docs:** https://auto-lirpa.readthedocs.io/  

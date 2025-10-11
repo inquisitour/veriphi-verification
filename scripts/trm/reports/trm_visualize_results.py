@@ -10,6 +10,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime
 
 # Directories
 LOG_DIR = "logs"
@@ -52,7 +53,13 @@ plt.xlabel("Bound Method")
 plt.ylabel("ε (Perturbation Radius)")
 plt.tight_layout()
 plot1 = os.path.join(REPORT_DIR, "heatmap_verified_fraction.png")
-plt.savefig(plot1, dpi=200)
+# ensure folder exists
+os.makedirs("plots", exist_ok=True)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+out_path = f"plots/trm_results_{timestamp}.png"
+plt.savefig(out_path, bbox_inches="tight")
+print(f"✅ Saved plot: {out_path}")
+
 plt.close()
 
 # --- 2️⃣ Attack confidence drop histogram ---
@@ -64,7 +71,12 @@ if "confidence_drop" in df.columns:
     plt.ylabel("Frequency")
     plt.tight_layout()
     plot2 = os.path.join(REPORT_DIR, "attack_confidence_hist.png")
-    plt.savefig(plot2, dpi=200)
+    # ensure folder exists
+    os.makedirs("plots", exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = f"plots/trm_results_{timestamp}.png"
+    plt.savefig(out_path, bbox_inches="tight")
+    print(f"✅ Saved plot: {out_path}")
     plt.close()
 else:
     print("⚠️ No 'confidence_drop' column found in logs. Skipping histogram.")
@@ -81,7 +93,13 @@ plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
 plot3 = os.path.join(REPORT_DIR, "verified_fraction_curve.png")
-plt.savefig(plot3, dpi=200)
+# ensure folder exists
+os.makedirs("plots", exist_ok=True)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+out_path = f"plots/trm_results_{timestamp}.png"
+plt.savefig(out_path, bbox_inches="tight")
+print(f"✅ Saved plot: {out_path}")
+
 plt.close()
 
 print(f"✅ Saved visualizations:")

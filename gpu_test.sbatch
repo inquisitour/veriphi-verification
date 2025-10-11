@@ -10,6 +10,11 @@
 
 source ~/venv/bin/activate
 cd ~/veriphi-verification
+export PYTHONPATH="$PWD/src:$PYTHONPATH"
+export VERIPHI_DEVICE=cuda     
+export CUDA_VISIBLE_DEVICES=0  
+export OMP_NUM_THREADS=1
+nvidia-smi
 module load cuda/12.9.0-gcc-12.2.0-xznhx43
-pip install -q git+https://github.com/Verified-Intelligence/auto_LiRPA.git
 python verify_installation.py
+python scripts/core_smoke.py

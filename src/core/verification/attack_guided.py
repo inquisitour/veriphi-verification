@@ -139,7 +139,7 @@ class AttackGuidedEngine(VerificationEngine):
                 res = attack.attack(model, input_sample, atk_cfg)
             except Exception as e:
                 print(f"      ○ {name} raised an exception during attack: {e}")
-                res = AttackResult(success=False, perturbation=None, additional_info={"error": str(e)})
+                res = AttackResult(success=False, additional_info={"error": str(e)})
 
             # Normalize AttackResult interface (duck-typed)
             if isinstance(res, AttackResult):
