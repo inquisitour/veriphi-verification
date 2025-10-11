@@ -282,14 +282,14 @@ Generated visual reports:
 | Stage | Goal | Status |
 |--------|------|--------|
 | 1️⃣ | CUDA acceleration (A100 verified) | ✅ |
-| 2️⃣ | Add TRM recursive architecture support | ✅ |
+| 2️⃣ | Add TRM MLP recursive architecture support | ✅ |
 | 3️⃣ | Adversarial + verified robustness training | ✅ |
 | 4️⃣ | Visual + PowerPoint auto‑reporting | ✅ |
-| 5️⃣ | Scale to 7M+ parameter TRM models | 🔜 |
+| 5️⃣ | Heavy runs for 7M parameter TRM models | 🔜 |
 
 ---
 
-## ## 📒 Guides
+## 📒 Guides
 
 - # [VSC5 Connection Guide (CLI)](./docs/vsc5_connection_readme.md)
 - # [Benchmarking Guide](./docs/trm_scaling_readme.md)
