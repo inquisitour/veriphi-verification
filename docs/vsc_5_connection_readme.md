@@ -145,3 +145,16 @@ If you were in an interactive `srun` session, that will release the GPU resource
 
 ---
 
+## 8️⃣ Alternative: JupyterHub Access
+
+VSC5 also provides JupyterHub browser access at `https://jupyterhub.vsc.ac.at`:
+
+1. Login with VSC credentials
+2. Select GPU resource profile (A100/A40)
+3. Launch terminal or notebook
+4. Continue from Step 5 above (activate environment)
+
+**Advantage:** No SSH needed, works behind restrictive firewalls.
+
+---
+

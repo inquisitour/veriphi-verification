@@ -1,109 +1,220 @@
 #!/usr/bin/env python3
 """
-Visualize TRM verification and attack-guided results:
- - Verified vs falsified heatmap by sample index
- - Attack confidence-drop histogram
- - ε (epsilon) vs verified fraction overlay
+Visualize TRM robustness sweep results.
+Generates plots from CSV data: model,epsilon,verified,falsified,total,avg_time_s,avg_mem_MB
+Output: Multiple PNG plots in plots/ and reports/
 """
 
 import os
+import glob
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
 
-# Directories
-LOG_DIR = "logs"
-REPORT_DIR = "reports"
-os.makedirs(REPORT_DIR, exist_ok=True)
-
-# --- Load all available sweep files ---
-csvs = [f for f in os.listdir(LOG_DIR) if f.startswith("trm_robustness_sweep") and f.endswith(".csv")]
-if not csvs:
-    raise FileNotFoundError("No sweep logs found in 'logs/'. Please run trm_tiny_sweep.py first.")
-
-dfs = []
-for c in csvs:
-    df = pd.read_csv(os.path.join(LOG_DIR, c))
-    # Infer bound method if not present
-    if "bound" not in df.columns:
-        if "alpha" in c:
-            df["bound"] = "α-CROWN"
-        elif "beta" in c:
-            df["bound"] = "β-CROWN"
-        else:
-            df["bound"] = "CROWN"
-    # Compute verified fraction if missing
-    if "verified_fraction" not in df.columns:
-        if "verified" in df.columns and "total" in df.columns:
-            df["verified_fraction"] = df["verified"] / df["total"]
-        else:
-            print(f"⚠️ Skipping {c}: missing verified/total columns")
-            continue
-    dfs.append(df)
-
-df = pd.concat(dfs, ignore_index=True)
-
-# --- 1️⃣ Verified vs falsified heatmap ---
-pivot = df.pivot_table(index="epsilon", columns="bound", values="verified_fraction", aggfunc="mean")
-plt.figure(figsize=(8, 5))
-sns.heatmap(pivot, annot=True, cmap="viridis", fmt=".2f")
-plt.title("Verified Fraction Heatmap (ε vs Bound Method)")
-plt.xlabel("Bound Method")
-plt.ylabel("ε (Perturbation Radius)")
-plt.tight_layout()
-plot1 = os.path.join(REPORT_DIR, "heatmap_verified_fraction.png")
-# ensure folder exists
+# Setup
 os.makedirs("plots", exist_ok=True)
+os.makedirs("reports", exist_ok=True)
+sns.set_style("whitegrid")
+
+# Load CSV data
+csvs = sorted(glob.glob("logs/trm_robustness_sweep*.csv"))
+if not csvs:
+    print("❌ No sweep CSVs found in logs/")
+    exit(1)
+
+df = pd.read_csv(csvs[-1])
+print(f"📄 Loaded: {csvs[-1]}")
+print(f"   Rows: {len(df)}, Columns: {list(df.columns)}")
+
+# Add verified_fraction if missing
+if "verified_fraction" not in df.columns:
+    df["verified_fraction"] = df["verified"] / df["total"]
+
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-out_path = f"plots/trm_results_{timestamp}.png"
-plt.savefig(out_path, bbox_inches="tight")
-print(f"✅ Saved plot: {out_path}")
 
+# ========================================
+# Plot 1: Verified Fraction vs Epsilon (Main Result)
+# ========================================
+plt.figure(figsize=(10, 6))
+for model in df["model"].unique():
+    data = df[df["model"] == model]
+    plt.plot(data["epsilon"], data["verified_fraction"], 
+             marker='o', linewidth=2.5, markersize=8, label=model)
+
+plt.xlabel("ε (L∞ perturbation)", fontsize=13)
+plt.ylabel("Fraction Verified", fontsize=13)
+plt.title("Certified Robustness — TRM-MLP on MNIST", fontsize=15, fontweight='bold')
+plt.grid(True, alpha=0.3)
+plt.legend(fontsize=11, loc='best')
+plt.tight_layout()
+plot1 = f"plots/trm_results_{timestamp}.png"
+plt.savefig(plot1, dpi=200, bbox_inches='tight')
 plt.close()
+print(f"✅ Saved plot: {plot1}")
 
-# --- 2️⃣ Attack confidence drop histogram ---
-if "confidence_drop" in df.columns:
-    plt.figure(figsize=(8, 5))
-    sns.histplot(data=df, x="confidence_drop", hue="bound", bins=30, kde=True)
-    plt.title("Distribution of Attack Confidence Drops")
-    plt.xlabel("Confidence Drop (original - attacked)")
-    plt.ylabel("Frequency")
+# ========================================
+# Plot 2: Verification Time vs Epsilon
+# ========================================
+plt.figure(figsize=(10, 6))
+for model in df["model"].unique():
+    data = df[df["model"] == model]
+    plt.plot(data["epsilon"], data["avg_time_s"], 
+             marker='s', linewidth=2.5, markersize=8, label=model)
+
+plt.xlabel("ε (L∞ perturbation)", fontsize=13)
+plt.ylabel("Avg Verification Time (s)", fontsize=13)
+plt.title("Verification Time vs Perturbation Size", fontsize=15, fontweight='bold')
+plt.grid(True, alpha=0.3)
+plt.legend(fontsize=11, loc='best')
+plt.tight_layout()
+plot2 = f"plots/trm_results_{timestamp}.png".replace(".png", "_time.png")
+plt.savefig(plot2, dpi=200, bbox_inches='tight')
+plt.close()
+print(f"✅ Saved plot: {plot2}")
+
+# ========================================
+# Plot 3: GPU Memory Usage
+# ========================================
+plt.figure(figsize=(10, 6))
+for model in df["model"].unique():
+    data = df[df["model"] == model]
+    plt.plot(data["epsilon"], data["avg_mem_MB"], 
+             marker='^', linewidth=2.5, markersize=8, label=model)
+
+plt.xlabel("ε (L∞ perturbation)", fontsize=13)
+plt.ylabel("GPU Memory (MB)", fontsize=13)
+plt.title("GPU Memory Usage During Verification", fontsize=15, fontweight='bold')
+plt.grid(True, alpha=0.3)
+plt.legend(fontsize=11, loc='best')
+plt.tight_layout()
+plot3 = f"plots/trm_results_{timestamp}.png".replace(".png", "_memory.png")
+plt.savefig(plot3, dpi=200, bbox_inches='tight')
+plt.close()
+print(f"✅ Saved plot: {plot3}")
+
+# ========================================
+# Plot 4: Heatmap - Verified Fraction (if multiple models/bounds)
+# ========================================
+# Check if we have data suitable for heatmap
+if "model" in df.columns and len(df["model"].unique()) > 1:
+    pivot_data = df.pivot_table(
+        values='verified_fraction', 
+        index='epsilon', 
+        columns='model', 
+        aggfunc='mean'
+    )
+    
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(pivot_data.T, annot=True, fmt='.2f', cmap='RdYlGn', 
+                cbar_kws={'label': 'Verified Fraction'}, vmin=0, vmax=1)
+    plt.title("Verified Fraction Heatmap", fontsize=15, fontweight='bold')
+    plt.xlabel("ε (L∞ perturbation)", fontsize=13)
+    plt.ylabel("Model", fontsize=13)
     plt.tight_layout()
-    plot2 = os.path.join(REPORT_DIR, "attack_confidence_hist.png")
-    # ensure folder exists
-    os.makedirs("plots", exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = f"plots/trm_results_{timestamp}.png"
-    plt.savefig(out_path, bbox_inches="tight")
-    print(f"✅ Saved plot: {out_path}")
+    heatmap_path = "reports/heatmap_verified_fraction.png"
+    plt.savefig(heatmap_path, dpi=200, bbox_inches='tight')
     plt.close()
+    print(f"✅ Saved heatmap: {heatmap_path}")
+else:
+    print("⚠️ Single model detected - skipping heatmap")
+
+# ========================================
+# Plot 5: Verified Fraction Curve (for reports/)
+# ========================================
+plt.figure(figsize=(10, 6))
+for model in df["model"].unique():
+    data = df[df["model"] == model]
+    plt.plot(data["epsilon"], data["verified_fraction"], 
+             marker='o', linewidth=3, markersize=10, label=model, alpha=0.8)
+
+plt.xlabel("ε (L∞ perturbation)", fontsize=14, fontweight='bold')
+plt.ylabel("Verified Fraction", fontsize=14, fontweight='bold')
+plt.title("TRM Certified Robustness", fontsize=16, fontweight='bold')
+plt.grid(True, alpha=0.4, linestyle='--')
+plt.legend(fontsize=12, loc='best', framealpha=0.9)
+plt.tight_layout()
+curve_path = "reports/verified_fraction_curve.png"
+plt.savefig(curve_path, dpi=250, bbox_inches='tight')
+plt.close()
+print(f"✅ Saved curve: {curve_path}")
+
+# ========================================
+# Plot 6: Bar Chart - Total Verified/Falsified by Model
+# ========================================
+summary = df.groupby("model").agg({
+    "verified": "sum",
+    "falsified": "sum"
+}).reset_index()
+
+fig, ax = plt.subplots(figsize=(10, 6))
+x = range(len(summary))
+width = 0.35
+
+bars1 = ax.bar([i - width/2 for i in x], summary["verified"], 
+               width, label='Verified', color='green', alpha=0.7)
+bars2 = ax.bar([i + width/2 for i in x], summary["falsified"], 
+               width, label='Falsified', color='red', alpha=0.7)
+
+ax.set_xlabel('Model', fontsize=13)
+ax.set_ylabel('Count', fontsize=13)
+ax.set_title('Total Verified vs Falsified Samples', fontsize=15, fontweight='bold')
+ax.set_xticks(x)
+ax.set_xticklabels(summary["model"])
+ax.legend(fontsize=11)
+ax.grid(True, alpha=0.3, axis='y')
+
+plt.tight_layout()
+bar_path = f"plots/trm_results_{timestamp}_barchart.png"
+plt.savefig(bar_path, dpi=200, bbox_inches='tight')
+plt.close()
+print(f"✅ Saved bar chart: {bar_path}")
+
+# ========================================
+# Plot 7: Confidence Drop Histogram (if available)
+# ========================================
+if "confidence_drop" in df.columns:
+    plt.figure(figsize=(10, 6))
+    for model in df["model"].unique():
+        data = df[df["model"] == model]
+        plt.hist(data["confidence_drop"], bins=20, alpha=0.6, label=model)
+    
+    plt.xlabel("Confidence Drop", fontsize=13)
+    plt.ylabel("Frequency", fontsize=13)
+    plt.title("Attack Confidence Drop Distribution", fontsize=15, fontweight='bold')
+    plt.legend(fontsize=11)
+    plt.grid(True, alpha=0.3, axis='y')
+    plt.tight_layout()
+    hist_path = "reports/attack_confidence_hist.png"
+    plt.savefig(hist_path, dpi=200, bbox_inches='tight')
+    plt.close()
+    print(f"✅ Saved histogram: {hist_path}")
 else:
     print("⚠️ No 'confidence_drop' column found in logs. Skipping histogram.")
 
-# --- 3️⃣ Epsilon vs Verified Fraction Overlay ---
-plt.figure(figsize=(8,5))
-for method in df["bound"].unique():
-    subset = df[df["bound"] == method]
-    plt.plot(subset["epsilon"], subset["verified_fraction"], marker="o", label=method)
-plt.title("Verified Fraction vs ε")
-plt.xlabel("ε (L∞ perturbation)")
-plt.ylabel("Verified Fraction")
-plt.legend()
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
-plot3 = os.path.join(REPORT_DIR, "verified_fraction_curve.png")
-# ensure folder exists
-os.makedirs("plots", exist_ok=True)
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-out_path = f"plots/trm_results_{timestamp}.png"
-plt.savefig(out_path, bbox_inches="tight")
-print(f"✅ Saved plot: {out_path}")
+# ========================================
+# Summary Statistics
+# ========================================
+print("\n" + "="*60)
+print("SUMMARY STATISTICS")
+print("="*60)
 
-plt.close()
+for model in df["model"].unique():
+    model_data = df[df["model"] == model]
+    print(f"\n📊 {model}")
+    print(f"   Total samples: {model_data['total'].sum()}")
+    print(f"   Total verified: {model_data['verified'].sum()}")
+    print(f"   Total falsified: {model_data['falsified'].sum()}")
+    print(f"   Avg verified fraction: {model_data['verified_fraction'].mean()*100:.1f}%")
+    print(f"   Avg verification time: {model_data['avg_time_s'].mean():.3f}s")
+    print(f"   Avg GPU memory: {model_data['avg_mem_MB'].mean():.1f} MB")
+    
+    # Best ε for this model
+    best_row = model_data.loc[model_data['verified_fraction'].idxmax()]
+    print(f"   Best ε: {best_row['epsilon']} ({best_row['verified_fraction']*100:.1f}% verified)")
 
-print(f"✅ Saved visualizations:")
-print(f" - {plot1}")
-if os.path.exists(os.path.join(REPORT_DIR, 'attack_confidence_hist.png')):
-    print(f" - {os.path.join(REPORT_DIR, 'attack_confidence_hist.png')}")
-print(f" - {plot3}")
+print("\n" + "="*60)
+print("✅ Visualization complete!")
+print(f"   Plots saved to: plots/")
+print(f"   Reports saved to: reports/")
+print("="*60)

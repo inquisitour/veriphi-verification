@@ -21,13 +21,18 @@ from torchvision import datasets, transforms
 from core import create_core_system
 from core.models import create_trm_mlp
 
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--samples', type=int, default=20, help='Number of samples to verify')
+args = parser.parse_args()
+
 # ----------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------
 DEVICE = torch.device(os.environ.get("VERIPHI_DEVICE", "cuda" if torch.cuda.is_available() else "cpu"))
 torch.backends.cudnn.benchmark = True
 EPSILONS = [0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1]
-NUM_SAMPLES = 20
+NUM_SAMPLES = args.samples
 TIMEOUT = 30  # seconds
 CHECKPOINTS = {
     "Standard TRM": "checkpoints/trm_mnist.pt",

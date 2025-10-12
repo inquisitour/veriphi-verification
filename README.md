@@ -258,22 +258,26 @@ src/core/
 
 ---
 
-## 📈 Results Summary
+## 📊 TRM Results Summary
 
-```
-✅ TRM Adversarially Trained Model
-ε = 0.03, norm = L∞
-verified = 7/10
-falsified = 3/10
-β‑CROWN > α‑CROWN > CROWN
-```
+**Final Scale Experiment (512 samples on A100):**
 
-Generated visual reports:
-- `trm_robustness_report.pdf`
-- `trm_compare_bounds_report.pdf`
-- `trm_full_visual_report.pdf`
-- `trm_hackathon_slide.pptx`
-- `trm_hackathon_slide.pdf`
+| ε | Adversarial TRM | Standard TRM | Improvement |
+|---|----------------|--------------|-------------|
+| 0.01 | **80.1%** | 1.2% | **67×** 🔥 |
+| 0.02 | **58.6%** | 0% | ∞ |
+| 0.03 | **40.2%** | 0% | ∞ |
+| 0.04 | **18.9%** | 0% | ∞ |
+
+**Performance metrics:**
+- Verification time: <0.25s per sample
+- GPU memory: <30MB per sample
+- Total verified: 410/512 samples @ ε=0.01
+
+**Generated outputs:**
+- `reports/trm_full_visual_report.pdf` - Comprehensive 4-page analysis
+- `reports/trm_hackathon_presentation.pptx` - 6-slide presentation
+- `reports/convergence_analysis.png` - Sample size impact study
 
 ---
 
@@ -282,10 +286,11 @@ Generated visual reports:
 | Stage | Goal | Status |
 |--------|------|--------|
 | 1️⃣ | CUDA acceleration (A100 verified) | ✅ |
-| 2️⃣ | Add TRM MLP recursive architecture support | ✅ |
-| 3️⃣ | Adversarial + verified robustness training | ✅ |
-| 4️⃣ | Visual + PowerPoint auto‑reporting | ✅ |
-| 5️⃣ | Heavy runs for 7M parameter TRM models | 🔜 |
+| 2️⃣ | TRM-MLP recursive architecture | ✅ |
+| 3️⃣ | Adversarial + verified training | ✅ |
+| 4️⃣ | Visual + PowerPoint reporting | ✅ |
+| 5️⃣ | Scale validation (512 samples) | ✅ |
+| 6️⃣ | Heavy runs for 7M parameter TRM | 🔜 |
 
 ---
 
