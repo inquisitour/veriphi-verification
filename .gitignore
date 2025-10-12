@@ -25,9 +25,7 @@ venv.bak/
 Thumbs.db
 
 # Project specific
-data/
 logs/
-results/
 *.log
 
 # Zone identifier files
