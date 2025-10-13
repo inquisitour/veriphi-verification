@@ -8,7 +8,7 @@ This short README explains how to connect to the **VSC5 cluster** via command li
 
 Before connecting:
 - You must have a **VSC5 user account** and VPN access configured (check that your VPN client is connected).
-- You must know your **VSC5 username** and the cluster **hostname** (example: `vsc5.tuwien.ac.at` or a specific login node like `login.vsc5.tuwien.ac.at`).
+- You must know your **VSC5 username** and the cluster **hostname**.
 
 ---
 
@@ -17,12 +17,12 @@ Before connecting:
 Open a terminal on your local machine (Linux/Mac or WSL on Windows) and run:
 
 ```bash
-ssh <your_username>@vsc5.tuwien.ac.at
+ssh <your_username>@vsc5.vsc.ac.at
 ```
 
 Example:
 ```bash
-ssh fs72936@vsc5.tuwien.ac.at
+ssh veriphi02@vsc5.vsc.ac.at
 ```
 
 If it’s your first connection, you may need to confirm the host fingerprint.
