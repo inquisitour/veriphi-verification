@@ -53,12 +53,16 @@ scontrol show node <node_name>
 You can request a GPU node interactively (replace partition and time as needed):
 
 ```bash
-srun --partition=gpu_a100 --gres=gpu:1 --time=02:00:00 --mem=32G --pty bash
+srun --partition=zen3_0512_a100x2 \
+     --qos=zen3_0512_a100x2 \
+     --gres=gpu:2 \
+     --time=00:25:00 \
+     --pty bash
 ```
 
 Explanation:
 - `--partition=gpu_a100` → request an A100 GPU node
-- `--gres=gpu:1` → 1 GPU
+- `--gres=gpu:2` → 2 GPU
 - `--time=02:00:00` → 2 hours
 - `--mem=32G` → 32 GB RAM
 
