@@ -24,6 +24,9 @@ from core.models import create_trm_mlp
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--samples', type=int, default=20, help='Number of samples to verify')
+parser.add_argument('--eps', type=str, default=None, help='Comma-separated epsilon values (e.g., "0.02,0.1,0.3") or single value')
+parser.add_argument('--checkpoint', type=str, default=None, 
+                   help='Path to specific checkpoint (overrides defaults)')
 args = parser.parse_args()
 
 # ----------------------------------------------------------
@@ -31,13 +34,29 @@ args = parser.parse_args()
 # ----------------------------------------------------------
 DEVICE = torch.device(os.environ.get("VERIPHI_DEVICE", "cuda" if torch.cuda.is_available() else "cpu"))
 torch.backends.cudnn.benchmark = True
-EPSILONS = [0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1]
+
+# Parse epsilon values
+if args.eps:
+    EPSILONS = [float(e.strip()) for e in args.eps.split(',')]
+else:
+    EPSILONS = [0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1]
+
 NUM_SAMPLES = args.samples
-TIMEOUT = 30  # seconds
-CHECKPOINTS = {
-    "Standard TRM": "checkpoints/trm_mnist.pt",
-    "Adversarial TRM": "checkpoints/trm_mnist_adv.pt",
-}
+TIMEOUT = 240
+
+# Handle checkpoint argument
+if args.checkpoint:
+    # Use only the specified checkpoint
+    checkpoint_name = os.path.basename(args.checkpoint).replace('.pt', '')
+    CHECKPOINTS = {
+        checkpoint_name: args.checkpoint
+    }
+else:
+    # Use default checkpoints
+    CHECKPOINTS = {
+        "Standard TRM": "checkpoints/trm_mnist.pt",
+        "Adversarial TRM": "checkpoints/trm_mnist_adv.pt",
+    }
 
 
 # ----------------------------------------------------------

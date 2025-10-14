@@ -15,7 +15,7 @@ os.makedirs("reports", exist_ok=True)
 os.makedirs("plots", exist_ok=True)
 
 # Load CSV data
-csvs = sorted(glob.glob("logs/trm_robustness_sweep*.csv"))
+csvs = sorted(glob.glob("logs/trm_robustness_sweep_phase2*.csv"))
 if not csvs:
     print("❌ No sweep CSVs found in logs/")
     exit(1)

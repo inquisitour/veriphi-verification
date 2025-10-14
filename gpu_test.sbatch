@@ -18,3 +18,4 @@ nvidia-smi
 module load cuda/12.9.0-gcc-12.2.0-xznhx43
 python verify_installation.py
 python scripts/core_smoke.py
+python scripts/trm/misc/trm_smoke.py
