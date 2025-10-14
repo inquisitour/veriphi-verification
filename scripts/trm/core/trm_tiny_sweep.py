@@ -1,14 +1,7 @@
 #!/usr/bin/env python3
 """
 TRM-MLP Robustness Sweep — Standard vs Adversarially Trained
-=============================================================
-
-Runs attack-guided verification for multiple ε (L∞) values and logs:
- - verified / falsified counts
- - average verification time
- - average GPU memory usage
- - comparison between standard and adversarial TRM-MLP
-Generates plots for robustness, time, and memory trends.
+Enhanced with bound method selection and sample range support
 """
 
 import os
@@ -24,18 +17,20 @@ from core.models import create_trm_mlp
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--samples', type=int, default=20, help='Number of samples to verify')
-parser.add_argument('--eps', type=str, default=None, help='Comma-separated epsilon values (e.g., "0.02,0.1,0.3") or single value')
-parser.add_argument('--checkpoint', type=str, default=None, 
-                   help='Path to specific checkpoint (overrides defaults)')
+parser.add_argument('--eps', type=str, default=None, help='Comma-separated epsilon values')
+parser.add_argument('--checkpoint', type=str, default=None, help='Path to specific checkpoint')
+parser.add_argument('--bound', type=str, default='CROWN', 
+                   choices=['IBP', 'CROWN', 'alpha-CROWN', 'beta-CROWN'],
+                   help='Bound method for verification')
+parser.add_argument('--start-idx', type=int, default=0, help='Starting sample index (for distributed)')
+parser.add_argument('--end-idx', type=int, default=None, help='Ending sample index (for distributed)')
+parser.add_argument('--node-id', type=int, default=None, help='Node ID for filename (distributed runs)')
 args = parser.parse_args()
 
-# ----------------------------------------------------------
 # Configuration
-# ----------------------------------------------------------
 DEVICE = torch.device(os.environ.get("VERIPHI_DEVICE", "cuda" if torch.cuda.is_available() else "cpu"))
 torch.backends.cudnn.benchmark = True
 
-# Parse epsilon values
 if args.eps:
     EPSILONS = [float(e.strip()) for e in args.eps.split(',')]
 else:
@@ -43,29 +38,30 @@ else:
 
 NUM_SAMPLES = args.samples
 TIMEOUT = 240
+BOUND_METHOD = args.bound
 
-# Handle checkpoint argument
 if args.checkpoint:
-    # Use only the specified checkpoint
     checkpoint_name = os.path.basename(args.checkpoint).replace('.pt', '')
-    CHECKPOINTS = {
-        checkpoint_name: args.checkpoint
-    }
+    CHECKPOINTS = {checkpoint_name: args.checkpoint}
 else:
-    # Use default checkpoints
     CHECKPOINTS = {
         "Standard TRM": "checkpoints/trm_mnist.pt",
         "Adversarial TRM": "checkpoints/trm_mnist_adv.pt",
     }
 
-
-# ----------------------------------------------------------
-# Sweep runner
-# ----------------------------------------------------------
 def run_sweep(model_path, label, epsilons):
     tfm = transforms.Compose([transforms.ToTensor()])
     test_ds = datasets.MNIST(root="data/mnist", train=False, download=True, transform=tfm)
-    indices = torch.randint(0, len(test_ds), (NUM_SAMPLES,)).tolist()
+    
+    # Handle sample range for distributed execution
+    start_idx = args.start_idx
+    end_idx = args.end_idx if args.end_idx else NUM_SAMPLES
+    actual_samples = end_idx - start_idx
+    
+    indices = torch.randint(0, len(test_ds), (NUM_SAMPLES,)).tolist()[start_idx:end_idx]
+    
+    print(f"Processing samples {start_idx} to {end_idx} ({actual_samples} samples)")
+    print(f"Using bound method: {BOUND_METHOD}")
 
     model = create_trm_mlp(
         x_dim=28 * 28, y_dim=10, z_dim=128, hidden=256,
@@ -80,7 +76,7 @@ def run_sweep(model_path, label, epsilons):
     for eps in epsilons:
         v, f = 0, 0
         times, mems = [], []
-        print(f"\n=== [{label}] ε = {eps} ===")
+        print(f"\n=== [{label}] ε = {eps} | bound = {BOUND_METHOD} ===")
 
         for idx in indices:
             x, y = test_ds[idx]
@@ -91,7 +87,10 @@ def run_sweep(model_path, label, epsilons):
                 torch.cuda.synchronize()
 
             t0 = time.time()
-            res = core.verify_robustness(model, x, epsilon=eps, norm="inf", timeout=TIMEOUT)
+            res = core.verify_robustness(
+                model, x, epsilon=eps, norm="inf", 
+                timeout=TIMEOUT, bound_method=BOUND_METHOD
+            )
             if DEVICE.type == "cuda":
                 torch.cuda.synchronize()
             dt = time.time() - t0
@@ -110,19 +109,14 @@ def run_sweep(model_path, label, epsilons):
 
         avg_time = np.mean(times)
         avg_mem = np.mean(mems) if mems else 0.0
-        results.append((eps, v, f, NUM_SAMPLES, avg_time, avg_mem))
-        print(f"{label}: ε={eps:.3f} → verified={v}/{NUM_SAMPLES}, avg_time={avg_time:.3f}s, avg_mem={avg_mem:.1f}MB")
+        results.append((eps, v, f, actual_samples, avg_time, avg_mem))
+        print(f"{label}: ε={eps:.3f} → verified={v}/{actual_samples}, avg_time={avg_time:.3f}s, avg_mem={avg_mem:.1f}MB")
 
     return results
 
-
-# ----------------------------------------------------------
-# Plotting utilities
-# ----------------------------------------------------------
 def plot_results(all_results):
     os.makedirs("plots", exist_ok=True)
 
-    # Robustness Curve
     plt.figure(figsize=(8, 5))
     for label, data in all_results.items():
         eps = [r[0] for r in data]
@@ -130,14 +124,13 @@ def plot_results(all_results):
         plt.plot(eps, verified_frac, marker='o', label=f"{label}")
     plt.xlabel("ε (L∞ perturbation)")
     plt.ylabel("Fraction Verified")
-    plt.title("Certified Robustness — TRM-MLP on MNIST")
+    plt.title(f"Certified Robustness — TRM-MLP ({BOUND_METHOD})")
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
-    plt.savefig("plots/trm_robustness_comparison.png", dpi=150)
-    print("✅ Saved: plots/trm_robustness_comparison.png")
+    plt.savefig(f"plots/trm_robustness_{BOUND_METHOD}.png", dpi=150)
+    print(f"✅ Saved: plots/trm_robustness_{BOUND_METHOD}.png")
 
-    # Time vs ε
     plt.figure(figsize=(8, 4))
     for label, data in all_results.items():
         eps = [r[0] for r in data]
@@ -152,7 +145,6 @@ def plot_results(all_results):
     plt.savefig("plots/trm_time_vs_eps.png", dpi=150)
     print("✅ Saved: plots/trm_time_vs_eps.png")
 
-    # Memory vs ε
     plt.figure(figsize=(8, 4))
     for label, data in all_results.items():
         eps = [r[0] for r in data]
@@ -167,10 +159,6 @@ def plot_results(all_results):
     plt.savefig("plots/trm_memory_vs_eps.png", dpi=150)
     print("✅ Saved: plots/trm_memory_vs_eps.png")
 
-
-# ----------------------------------------------------------
-# Main
-# ----------------------------------------------------------
 def main():
     os.makedirs("logs", exist_ok=True)
     all_results = {}
@@ -181,20 +169,18 @@ def main():
         else:
             print(f"⚠️ Missing checkpoint: {path}")
 
-    # Save combined CSV
-    csv_path = "logs/trm_robustness_sweep_full.csv"
+    # Save CSV with bound method in filename
+    csv_path = f"logs/trm_sweep_{BOUND_METHOD}_{args.start_idx}_{args.end_idx or NUM_SAMPLES}.csv"
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["model", "epsilon", "verified", "falsified", "total", "avg_time_s", "avg_mem_MB"])
+        writer.writerow(["model", "epsilon", "verified", "falsified", "total", "avg_time_s", "avg_mem_MB", "bound"])
         for label, data in all_results.items():
             for r in data:
-                writer.writerow([label, *r])
+                writer.writerow([label, *r, BOUND_METHOD])
     print(f"\n✅ Saved results → {csv_path}")
 
-    # Plot
     plot_results(all_results)
-    print("\n🎯 Sweep complete — results logged and plots generated!")
-
+    print("\n🎯 Sweep complete!")
 
 if __name__ == "__main__":
     main()

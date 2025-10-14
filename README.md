@@ -38,7 +38,9 @@ cd veriphi-verification
 python3 -m venv venv
 source venv/bin/activate
 
-# Install (use CUDA wheels if you have GPU)
+# Installation
+pip install git+https://github.com/Verified-Intelligence/auto_LiRPA.git
+
 pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121
 ```
 
