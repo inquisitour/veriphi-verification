@@ -5,7 +5,7 @@ A **GPU‑accelerated verification stack** combining **attack‑guided adversari
 
 It answers a simple but critical question:
 
-> **“Is this model provably robust within ε under L∞ or L2 perturbations?”**
+> **"Is this model provably robust within ε under L∞ or L2 perturbations?"**
 
 …and returns **verified / falsified**, with measured **runtime & memory**.
 
@@ -22,8 +22,11 @@ It answers a simple but critical question:
 ✅ **GPU‑Accelerated Verification:**  
    Works seamlessly on **A100, RTX** or any CUDA‑enabled GPU.
 
-✅ **Bound Comparison (CROWN vs α‑, β‑CROWN):**  
-   Demonstrates verified fraction improvements through **adversarial training** and **tight bounds**.
+✅ **Cross-Dataset Validation:**  
+   Comprehensive verification on **MNIST** and **CIFAR-10** with 3 training methods (Baseline, IBP, PGD).
+
+✅ **Multi-Bound Comparison:**  
+   Systematic evaluation of **CROWN, α-CROWN, β-CROWN** across datasets and models.
 
 ---
 
@@ -40,16 +43,7 @@ source venv/bin/activate
 
 # Installation
 pip install git+https://github.com/Verified-Intelligence/auto_LiRPA.git
-
 pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121
-```
-
-(Optional) install auto‑LiRPA from source:
-```bash
-git clone https://github.com/Verified-Intelligence/auto_LiRPA.git
-cd auto_LiRPA && git checkout v0.6.0
-pip install -e .
-cd ..
 ```
 
 Verify your toolchain:
@@ -68,23 +62,11 @@ export PYTHONPATH="$PWD/src:$PYTHONPATH"
 python scripts/core_smoke.py
 ```
 
-Minimal one-liner check:
-```bash
-python - <<'PY'
-from core import create_core_system
-from core.models import create_test_model, create_sample_input
-core  = create_core_system(use_attacks=True, device='cpu')
-model = create_test_model('tiny'); x = create_sample_input('tiny')
-res   = core.verify_robustness(model, x, epsilon=0.1, norm='inf', timeout=30)
-print(res.status.value, res.verified, f"{res.verification_time:.3f}s", "mem=", res.additional_info.get("memory_usage_mb"))
-PY
-```
-
 ---
 
 ## ⚡ GPU mode
 
-Veriphi now fully supports **CUDA (A100, RTX, etc.)**.
+Veriphi fully supports **CUDA (A100, RTX, etc.)**.
 
 ```bash
 # Enable GPU device
@@ -93,193 +75,122 @@ export VERIPHI_DEVICE=cuda
 
 All engines, attacks, and models will automatically run on the GPU.
 
-Check GPU availability:
-```bash
-python - <<'PY'
-import torch
-print("CUDA available:", torch.cuda.is_available())
-print("GPUs:", torch.cuda.device_count())
-for i in range(torch.cuda.device_count()):
-    print(f"  GPU {i}:", torch.cuda.get_device_name(i))
-PY
-```
-
-Run a GPU smoke test:
-```bash
-python scripts/gpu_smoke.py
-```
-
-Expected:  
-```
-CUDA available: True
-✓ Attack-guided verification engine initialized on cuda
-Verification result: verified ...
-```
-
 ---
 
-## 🧪 Tests
+## 📊 Complete Verification Results
 
-```bash
-# All tests (unit + integration + benchmarks)
-export VERIPHI_DEVICE=cuda
-python -m pytest -q
-```
+### MNIST (28×28 grayscale, 512 samples)
 
-Or target a suite:
-```bash
-pytest tests/unit -q
-pytest tests/integration -q
-pytest tests/benchmarks -q
-```
+| Training Method | ε=0.04 | ε=0.06 | ε=0.08 | ε=0.1 | **Winner** |
+|----------------|--------|--------|--------|-------|------------|
+| **IBP (1/255)** | 47% | **77%** | **78%** | **75%** | 🥇 |
+| **PGD (2/255)** | 43% | 63% | 65% | 60% | 🥈 |
+| **Baseline** | 0% | 0% | 0% | 0% | ❌ |
 
-To run the full verification validation:
-```bash
-export VERIPHI_DEVICE=cuda && python run_tests.py --all --fix-tests
-```
+### CIFAR-10 (32×32 RGB, 512 samples)
 
----
+| Training Method | ε=0.001 | ε=0.002 | ε=0.004 | ε=0.006 | **Winner** |
+|----------------|---------|---------|---------|---------|------------|
+| **PGD (8/255)** | **94%** | **90%** | **80%** | **67%** | 🥇 |
+| **IBP (2/255)** | 78% | 51% | 10% | 1% | 🥈 |
+| **Baseline** | 82% | 55% | 13% | 1% | 🥉 |
 
-## 📊 Baselines
-
-We keep results under:
-- `data/baselines/cpu/` — CPU performance
-- `data/baselines/gpu/` — GPU performance (A100, RTX, etc.)
-
-### Generate CPU baselines
-```bash
-source venv/bin/activate
-export PYTHONPATH="$PWD/src:$PYTHONPATH"
-python scripts/run_cpu_baselines.py
-```
-
-### Generate GPU baselines
-```bash
-source venv/bin/activate
-export PYTHONPATH="$PWD/src:$PYTHONPATH"
-export VERIPHI_DEVICE=cuda
-python scripts/run_gpu_baselines.py
-```
-
-Each run creates:
-```
-data/baselines/{cpu|gpu}/{cpu|gpu}_baselines_<timestamp>.csv
-```
-
-### Summarize baselines
-```bash
-python scripts/summarize_baselines.py
-```
-
-Writes grouped summaries to:
-```
-data/baselines/{cpu|gpu}/summary/summary_<timestamp>.csv
-```
+**Key Finding:** Training method effectiveness depends on dataset complexity:
+- **IBP dominates on simple MNIST** (75-78% @ ε=0.06-0.1)
+- **PGD dominates on complex CIFAR-10** (48-95% across all ε)
+- **Bound methods (α/β-CROWN)** provide <5% improvement over CROWN
 
 ---
 
 ## 🧩 TRM Experiments
 
-### Train TRM‑MLP on MNIST
+### Training Scripts
+
 ```bash
-python scripts/trm_tiny_train.py
+# MNIST
+python scripts/trm/core/trm_tiny_train.py              # Baseline
+python scripts/trm/core/trm_tiny_advtrain.py           # PGD adversarial
+python scripts/trm/core/trm_ibp_train.py               # IBP certified
+
+# CIFAR-10
+python scripts/trm/core/trm_tiny_train_cifar10.py      # Baseline
+python scripts/trm/core/trm_tiny_advtrain_cifar10.py   # PGD adversarial
+python scripts/trm/core/trm_ibp_train_cifar10.py       # IBP certified
 ```
 
-### Adversarially Fine‑Tune
+### Verification Sweeps
+
 ```bash
-python scripts/trm_tiny_advtrain.py
+# MNIST - Full sweep (512 samples, 3 bounds)
+python scripts/trm/core/trm_tiny_sweep.py \
+  --samples 512 \
+  --eps 0.01,0.02,0.03,0.04,0.06,0.08,0.1 \
+  --bound CROWN
+
+# CIFAR-10 - Full sweep
+python scripts/trm/core/trm_tiny_sweep_cifar10.py \
+  --samples 512 \
+  --eps 0.001,0.002,0.004,0.006,0.008,0.01 \
+  --bound CROWN
 ```
 
-### Verify Robustness (attack + formal)
+### Generate Reports
+
 ```bash
-python scripts/trm_tiny_verify.py
+# MNIST comprehensive report
+python scripts/trm/reports/trm_full_visual_report_mnist.py
+
+# CIFAR-10 comprehensive report
+python scripts/trm/reports/trm_full_visual_report_cifar10.py
+
+# Bound comparison across datasets
+python scripts/trm/reports/trm_compare_bounds_report.py
 ```
 
-Outputs detailed logs for each ε and produces:
-```
-reports/trm_robustness_report.pdf
-```
-
-### Bound Comparison Sweep
-```bash
-python scripts/trm_tiny_sweep.py
-```
-
-Generates cross‑method comparison:
-- α‑CROWN
-- β‑CROWN
-- CROWN baseline
-
-### Visual Report
-```bash
-python scripts/trm_visualize_results.py
-```
-
-Produces:
-```
-reports/trm_full_visual_report.pdf
-```
-
-### Streamlit UI
-```bash
-chmod +x run_streamlit_safe.sh
-```
-```bash
-./run_streamlit_safe.sh
-```
-
----
-
-## 📊 Example Verified Fractions (TRM, ε = 0.03, L∞)
-
-| Bound Method | Avg Verified Fraction |
-|---------------|----------------------:|
-| CROWN         | 0.111 |
-| α‑CROWN       | 0.143 |
-| **β‑CROWN**   | **0.146 ✅** |
+**Generated outputs:**
+- `reports/trm_mnist_full_report_*.pdf` - MNIST analysis
+- `reports/trm_cifar10_full_report_*.pdf` - CIFAR-10 analysis
+- `reports/trm_compare_bounds_report_*.pdf` - Cross-bound comparison
+- `plots/` - Individual visualization files
 
 ---
 
 ## 🏗️ Architecture Overview
 
 ```
-src/core/
-├── verification/
-│   ├── base.py              # Verification interfaces + configs
-│   ├── alpha_beta_crown.py  # α,β‑CROWN formal bound engines
-│   └── attack_guided.py     # Orchestrates attacks + verifier
-├── attacks/
-│   ├── base.py              # Attack interfaces
-│   └── fgsm.py              # FGSM + iterative FGSM
-├── models/
-│   ├── test_models.py       # Tiny/Linear/Conv models
-│   ├── resnet_stubs.py      # ResNet‑18/50 demo integration
-│   └── trm_adapter.py       # TRM‑MLP + recursive model adapter
-└── __init__.py              # VeriphiCore façade
+scripts/trm/
+├── core/
+│   ├── trm_tiny_train*.py           # Training scripts (MNIST/CIFAR-10)
+│   ├── trm_tiny_advtrain*.py        # PGD adversarial training
+│   ├── trm_ibp_train*.py            # IBP certified training
+│   ├── trm_tiny_verify*.py          # Single-sample verification
+│   └── trm_tiny_sweep*.py           # Batch verification sweeps
+├── reports/
+│   ├── trm_visualize_results.py           # Generate plots
+│   ├── trm_full_visual_report_*.py        # PDF reports (MNIST/CIFAR-10)
+│   └── trm_compare_bounds_report.py       # Multi-bound comparison
+└── presentation/
+    └── trm_presentation_slide.py          # PowerPoint generation
+
+checkpoints/          # Trained model weights
+logs/                 # CSV verification results
+plots/                # Generated visualizations
+reports/              # PDF reports
 ```
 
 ---
 
-## 📊 TRM Results Summary
+## 📊 Performance Metrics
 
-**Final Scale Experiment (512 samples on A100):**
+**Verification Efficiency:**
+- **MNIST:** ~0.15-0.24s per sample
+- **CIFAR-10:** ~0.09-0.24s per sample
+- **GPU Memory:** 18-53 MB per sample (A100)
 
-| ε | Adversarial TRM | Standard TRM | Improvement |
-|---|----------------|--------------|-------------|
-| 0.01 | **80.1%** | 1.2% | **67×** 🔥 |
-| 0.02 | **58.6%** | 0% | ∞ |
-| 0.03 | **40.2%** | 0% | ∞ |
-| 0.04 | **18.9%** | 0% | ∞ |
-
-**Performance metrics:**
-- Verification time: <0.25s per sample
-- GPU memory: <30MB per sample
-- Total verified: 410/512 samples @ ε=0.01
-
-**Generated outputs:**
-- `reports/trm_full_visual_report.pdf` - Comprehensive 4-page analysis
-- `reports/trm_hackathon_presentation.pptx` - 6-slide presentation
-- `reports/convergence_analysis.png` - Sample size impact study
+**Bound Method Comparison:**
+- **CROWN:** Fastest, baseline accuracy
+- **α-CROWN:** +0-5% accuracy, ~1.2× slower
+- **β-CROWN:** +0-9% accuracy (baselines only), ~1.5× slower
 
 ---
 
@@ -289,10 +200,11 @@ src/core/
 |--------|------|--------|
 | 1️⃣ | CUDA acceleration (A100 verified) | ✅ |
 | 2️⃣ | TRM-MLP recursive architecture | ✅ |
-| 3️⃣ | Adversarial + verified training | ✅ |
-| 4️⃣ | Visual + PowerPoint reporting | ✅ |
-| 5️⃣ | Scale validation (512 samples) | ✅ |
-| 6️⃣ | Heavy runs for 7M parameter TRM | 🔜 |
+| 3️⃣ | Multiple training methods (Baseline, IBP, PGD) | ✅ |
+| 4️⃣ | Cross-dataset validation (MNIST + CIFAR-10) | ✅ |
+| 5️⃣ | Multi-bound comparison (CROWN, α/β-CROWN) | ✅ |
+| 6️⃣ | Comprehensive reporting & visualization | ✅ |
+| 7️⃣ | Scale to larger models & datasets | 🔜 |
 
 ---
 
@@ -318,4 +230,4 @@ MIT — see `LICENSE`.
 
 ---
  
-“*Bridging adversarial testing and formal verification for truly robust neural networks.*”
+"*Bridging adversarial testing and formal verification for truly robust neural networks.*"

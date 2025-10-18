@@ -37,7 +37,7 @@ else:
     EPSILONS = [0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1]
 
 NUM_SAMPLES = args.samples
-TIMEOUT = 240
+TIMEOUT = 900
 BOUND_METHOD = args.bound
 
 if args.checkpoint:
@@ -45,8 +45,9 @@ if args.checkpoint:
     CHECKPOINTS = {checkpoint_name: args.checkpoint}
 else:
     CHECKPOINTS = {
-        "Standard TRM": "checkpoints/trm_mnist.pt",
-        "Adversarial TRM": "checkpoints/trm_mnist_adv.pt",
+        "Baseline": "checkpoints/trm_mnist.pt",
+        "IBP (eps=1/255)": "checkpoints/trm_mnist_ibp_eps001_weights.pt",
+        "PGD (eps=2/255)": "checkpoints/trm_mnist_adv_eps020.pt",
     }
 
 def run_sweep(model_path, label, epsilons):
@@ -169,8 +170,10 @@ def main():
         else:
             print(f"⚠️ Missing checkpoint: {path}")
 
-    # Save CSV with bound method in filename
-    csv_path = f"logs/trm_sweep_{BOUND_METHOD}_{args.start_idx}_{args.end_idx or NUM_SAMPLES}.csv"
+    # Save CSV with bound method and checkpoint name in filename
+    checkpoint_base = os.path.basename(args.checkpoint).replace('.pt', '') if args.checkpoint else "default"
+    csv_path = f"logs/trm_sweep_{checkpoint_base}_{BOUND_METHOD}_{args.start_idx}_{args.end_idx or NUM_SAMPLES}.csv"
+
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["model", "epsilon", "verified", "falsified", "total", "avg_time_s", "avg_mem_MB", "bound"])

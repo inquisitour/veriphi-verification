@@ -16,11 +16,11 @@ from torchvision import datasets, transforms
 
 # Add parent directories to path for imports
 script_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(os.path.dirname(script_dir))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+repo_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
 
-from scripts.trm.core.models import create_trm_mlp
+from src.core.models import create_trm_mlp
 
 DEVICE = torch.device(os.environ.get("VERIPHI_DEVICE", "cuda" if torch.cuda.is_available() else "cpu"))
 
