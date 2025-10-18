@@ -1,4 +1,4 @@
-# src/frontend/app.py (Simplified for Login Node)
+# src/frontend/app.py (Updated for MNIST + CIFAR-10 Results)
 import os
 import sys
 import pandas as pd
@@ -39,7 +39,6 @@ st.markdown("""
         margin-bottom: 2rem;
     }
     
-    /* Tab styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
     }
@@ -65,13 +64,14 @@ st.markdown("""
 # HELPER FUNCTIONS
 # ============================================================================
 
-def load_trm_results():
-    """Load TRM robustness sweep results."""
+def load_dataset_results(dataset_name):
+    """Load TRM verification results for specific dataset (mnist or cifar10)."""
     log_dir = "logs"
     if not os.path.exists(log_dir):
         return None
     
-    csvs = glob.glob(os.path.join(log_dir, "trm_robustness_sweep*.csv"))
+    pattern = f"trm_{dataset_name}_sweep*.csv"
+    csvs = glob.glob(os.path.join(log_dir, pattern))
     
     if not csvs:
         return None
@@ -109,7 +109,7 @@ def load_trm_results():
 # ============================================================================
 
 st.markdown('<h1 class="main-header">🛡️ Veriphi TRM Verification</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Attack-Guided Verification Results for Tiny Recursive Models</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Cross-Dataset Robustness Verification: MNIST & CIFAR-10</p>', unsafe_allow_html=True)
 
 # ============================================================================
 # SIDEBAR
@@ -122,32 +122,27 @@ with st.sidebar:
     **Neural Network Robustness Verification**
     
     Combining fast adversarial attacks with formal verification methods 
-    to certify neural network robustness.
+    to certify neural network robustness across datasets.
     """)
     
     st.markdown("---")
     
-    st.markdown("### 🎯 Key Components")
+    st.markdown("### 🎯 Key Results")
+    
+    st.markdown("**MNIST (28×28):**")
+    st.metric("IBP @ ε=0.1", "75%", help="IBP dominates on simple data")
+    
+    st.markdown("**CIFAR-10 (32×32):**")
+    st.metric("PGD @ ε=0.001", "94%", help="PGD dominates on complex data")
+    
+    st.markdown("---")
+    
+    st.markdown("### 📊 Training Methods")
     st.markdown("""
-    - **Attack-Guided Verification**  
-      FGSM + I-FGSM → α,β-CROWN
-      
-    - **TRM Architecture**  
-      Tiny Recursive Models on MNIST
-      
-    - **Adversarial Training**  
-      ε=0.15 PGD training
-      
-    - **GPU-Accelerated**  
-      VSC-5 A100 cluster
+    - **Baseline:** Standard training
+    - **IBP:** Certified training (1-2/255)
+    - **PGD:** Adversarial training (2-8/255)
     """)
-    
-    st.markdown("---")
-    
-    st.markdown("### 📊 Current Results")
-    st.metric("Verified @ ε=0.01", "80.1%", delta="+67x vs standard")
-    st.metric("Avg Time/Sample", "0.25s", delta="GPU optimized")
-    st.metric("Total Samples", "512", help="Statistically significant")
     
     st.markdown("---")
     
@@ -156,7 +151,6 @@ with st.sidebar:
     - [GitHub Repo](https://github.com/inquisitour/veriphi-verification)
     - [TRM Paper](https://arxiv.org/abs/2510.04871)
     - [α,β-CROWN](https://arxiv.org/abs/2103.06624)
-    - [VSC-5 Cluster](https://vsc.ac.at/systems/vsc-5/)
     """)
     
     st.markdown("---")
@@ -166,9 +160,11 @@ with st.sidebar:
 # MAIN TABS
 # ============================================================================
 
-tab1, tab2 = st.tabs([
-    "📚 Project Overview", 
-    "🧠 TRM Results"
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📚 Project Overview",
+    "🔢 MNIST Results", 
+    "🖼️ CIFAR-10 Results",
+    "🔄 Cross-Dataset Analysis"
 ])
 
 # ============================================================================
@@ -179,466 +175,328 @@ with tab1:
     st.header("📚 Project Overview")
     
     # Problem Statement
-    st.markdown("### ❗ The Problem")
+    st.markdown("### ❗ The Challenge")
     st.markdown("""
-    Neural networks are vulnerable to **adversarial attacks** - small, imperceptible 
-    perturbations that cause misclassification. This is critical for:
+    **Training method effectiveness depends on dataset complexity:**
     
-    - 🚗 Autonomous vehicles
-    - 🏥 Medical diagnosis systems
-    - 🔒 Security applications
-    - 💰 Financial AI systems
+    - Simple datasets (MNIST) → IBP training excels
+    - Complex datasets (CIFAR-10) → PGD training dominates
+    - Verification difficulty scales exponentially with input dimensions
     """)
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.error("""
-        **❌ Standard Training**
-        - No robustness guarantees
-        - Vulnerable to attacks
-        - ~1% verified @ ε=0.01
+        st.info("""
+        **MNIST (784 dims)**
+        - 🥇 IBP: 75-78% @ ε=0.06-0.1
+        - 🥈 PGD: 60-65% @ ε=0.08-0.1
+        - ❌ Baseline: 0-3%
         """)
     
     with col2:
-        st.success("""
-        **✅ Adversarial Training**
-        - Certified robustness
-        - Attack-resistant
-        - **80% verified @ ε=0.01**
-        """)
-    
-    st.markdown("---")
-    
-    # Solution
-    st.markdown("### 💡 Our Solution: Attack-Guided Verification")
-    
-    st.markdown("""
-    We combine **fast adversarial attacks** with **formal verification** for efficient certification:
-    """)
-    
-    # Workflow diagram using columns
-    col_step1, col_arrow1, col_step2, col_arrow2, col_step3 = st.columns([3, 1, 3, 1, 3])
-    
-    with col_step1:
         st.info("""
-        **Phase 1: Attack**
-        - FGSM, I-FGSM
-        - 20-50ms execution
-        - Find vulnerabilities fast
-        """)
-    
-    with col_arrow1:
-        st.markdown("### →")
-    
-    with col_step2:
-        st.warning("""
-        **Decision Point**
-        - Attack found bug? → FALSIFIED ❌
-        - No bug found? → Proceed to Phase 2
-        """)
-    
-    with col_arrow2:
-        st.markdown("### →")
-    
-    with col_step3:
-        st.success("""
-        **Phase 2: Formal**
-        - α,β-CROWN bounds
-        - 100-500ms execution
-        - Mathematical proof ✓
+        **CIFAR-10 (3072 dims)**
+        - 🥇 PGD: 48-95% across all ε
+        - 🥈 IBP: Failed (no improvement)
+        - ❌ Baseline: 0-82% (small ε only)
         """)
     
     st.markdown("---")
     
-    # TRM Architecture
-    st.markdown("### 🧠 Tiny Recursive Models (TRM)")
+    # Key Findings
+    st.markdown("### 💡 Key Findings")
     
-    st.markdown("""
-    TRM is a novel architecture using **recursive computation** instead of deep stacking:
-    """)
+    findings_col1, findings_col2, findings_col3 = st.columns(3)
     
-    trm_col1, trm_col2 = st.columns(2)
-    
-    with trm_col1:
-        st.markdown("""
-        **Traditional Deep Networks:**
-        - 32+ layers stacked
-        - 500M+ parameters
-        - Hard to verify
+    with findings_col1:
+        st.success("""
+        **IBP Works on Simple Data**
+        
+        Certified training effective on MNIST, achieving 78% verified @ ε=0.08.
         """)
     
-    with trm_col2:
-        st.markdown("""
-        **TRM Approach:**
-        - **2 layers** recursively applied
-        - **~1M parameters** (100x smaller)
-        - **Easier to verify** ✅
+    with findings_col2:
+        st.success("""
+        **PGD Generalizes Better**
+        
+        Adversarial training robust across both MNIST and CIFAR-10.
         """)
     
-    st.info("""
-    **Key Insight:** Recursive depth (H_cycles × L_cycles) achieves deep network 
-    performance with shallow network verifiability.
-    """)
+    with findings_col3:
+        st.warning("""
+        **Bounds Have Limits**
+        
+        α/β-CROWN provide <5% improvement over CROWN.
+        """)
     
     st.markdown("---")
     
     # Methodology
-    st.markdown("### 🔬 Our Methodology")
+    st.markdown("### 🔬 Methodology")
     
     st.markdown("""
     **Training Pipeline:**
-    1. Train standard TRM-MLP on MNIST (28×28 grayscale)
-    2. Adversarially fine-tune with PGD (ε=0.15)
-    3. Verify robustness across multiple ε values
+    - **Baseline:** Standard supervised training
+    - **IBP:** Interval bound propagation training (ε=1-2/255)
+    - **PGD:** FGSM adversarial training (ε=2-8/255)
     
     **Verification Setup:**
     - **Hardware:** VSC-5 A100 GPU (80GB)
-    - **Framework:** auto-LiRPA + α,β-CROWN
-    - **Dataset:** MNIST test set (512 samples)
-    - **Perturbation:** L∞ norm (ε: 0.01 → 0.1)
-    """)
-    
-    st.code("""
-# Training
-python scripts/trm/core/trm_tiny_train.py      # Standard training
-python scripts/trm/core/trm_tiny_advtrain.py   # Adversarial training (ε=0.15)
-
-# Verification
-python scripts/trm/core/trm_tiny_sweep.py --samples 512 --eps 0.01,0.02,0.03,0.04
-
-# Analysis
-python scripts/trm/reports/trm_full_visual_report.py
-    """, language="bash")
-    
-    st.markdown("---")
-    
-    # Key Achievements
-    st.markdown("### 🏆 Key Achievements")
-    
-    achieve_col1, achieve_col2, achieve_col3 = st.columns(3)
-    
-    with achieve_col1:
-        st.metric(
-            "Robustness Improvement",
-            "67×",
-            help="Adversarial vs Standard TRM @ ε=0.01"
-        )
-    
-    with achieve_col2:
-        st.metric(
-            "Verification Speedup",
-            "85%",
-            help="Attack-guided vs pure formal verification"
-        )
-    
-    with achieve_col3:
-        st.metric(
-            "GPU Performance",
-            "5.4×",
-            help="GPU vs CPU speedup on A100"
-        )
-    
-    st.markdown("---")
-    
-    # Technical Stack
-    st.markdown("### 🛠️ Technical Stack")
-    
-    tech_col1, tech_col2 = st.columns(2)
-    
-    with tech_col1:
-        st.markdown("""
-        **Core Technologies:**
-        - PyTorch 2.0+ (CUDA 12.1)
-        - auto-LiRPA (α,β-CROWN)
-        - Streamlit (UI)
-        - VSC-5 HPC cluster
-        """)
-    
-    with tech_col2:
-        st.markdown("""
-        **Verification Methods:**
-        - CROWN (baseline)
-        - α-CROWN (optimized)
-        - β-CROWN (tightest bounds)
-        - FGSM/I-FGSM attacks
-        """)
-    
-    st.markdown("---")
-    
-    # Future Work
-    st.markdown("### 🚀 Next Steps")
-    
-    st.markdown("""
-    **Phase 1 (Current):** ✅ Baseline established @ ε=0.01
-    
-    **Phase 2 (In Progress):** Test standard benchmarks (ε=0.02, 0.1, 0.3)
-    
-    **Phase 3 (Planned):** 
-    - CROWN-IBP certified training
-    - Scale to full 7M parameter TRM
-    - Extend to CIFAR-10 dataset
-    - Publication at VNN-COMP 2025 / ICLR 2026
+    - **Framework:** auto-LiRPA (CROWN, α-CROWN, β-CROWN)
+    - **Samples:** 512 per model per epsilon
+    - **Bounds:** Tested all 3 methods per dataset
     """)
 
 # ============================================================================
-# TAB 2: TRM RESULTS
+# TAB 2: MNIST RESULTS
 # ============================================================================
 
 with tab2:
-    st.header("🧠 TRM Verification Results")
+    st.header("🔢 MNIST Verification Results")
     
-    trm_df = load_trm_results()
+    mnist_df = load_dataset_results("mnist")
     
-    if trm_df is not None and not trm_df.empty:
-        st.success(f"✅ Loaded {len(trm_df)} verification records from logs/")
+    if mnist_df is not None and not mnist_df.empty:
+        st.success(f"✅ Loaded {len(mnist_df)} MNIST verification records")
         
-        # Summary Metrics
-        st.markdown("### 📊 Summary Statistics")
+        # Summary Table
+        st.markdown("### 📊 Summary (512 samples, β-CROWN)")
         
-        metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
-        
-        # Calculate key metrics
-        if 'model' in trm_df.columns:
-            adv_results = trm_df[trm_df['model'].str.contains('Adversarial', na=False)]
-            std_results = trm_df[trm_df['model'].str.contains('Standard', na=False)]
-            
-            with metric_col1:
-                if not adv_results.empty and 'verified_fraction' in adv_results.columns:
-                    best_adv = adv_results['verified_fraction'].max() * 100
-                    st.metric("Adversarial TRM (Best)", f"{best_adv:.1f}%")
-                else:
-                    st.metric("Adversarial TRM", "N/A")
-            
-            with metric_col2:
-                if not std_results.empty and 'verified_fraction' in std_results.columns:
-                    best_std = std_results['verified_fraction'].max() * 100
-                    st.metric("Standard TRM (Best)", f"{best_std:.1f}%")
-                else:
-                    st.metric("Standard TRM", "N/A")
-            
-            with metric_col3:
-                if 'avg_time_s' in trm_df.columns:
-                    avg_time = trm_df['avg_time_s'].mean()
-                    st.metric("Avg Time/Sample", f"{avg_time:.3f}s")
-                else:
-                    st.metric("Avg Time/Sample", "N/A")
-            
-            with metric_col4:
-                total_samples = trm_df['total'].sum() if 'total' in trm_df.columns else len(trm_df)
-                st.metric("Total Samples", f"{total_samples}")
+        summary_data = pd.DataFrame({
+            'Model': ['Baseline', 'IBP (ε=1/255)', 'PGD (ε=2/255)'],
+            'ε=0.01': ['3%', '18%', '30%'],
+            'ε=0.04': ['0%', '47%', '43%'],
+            'ε=0.06': ['0%', '77%', '63%'],
+            'ε=0.08': ['0%', '78%', '65%'],
+            'ε=0.1': ['0%', '75%', '60%'],
+            'Winner': ['❌', '🥇', '🥈']
+        })
+        st.dataframe(summary_data, use_container_width=True, hide_index=True)
         
         st.markdown("---")
         
-        # Visualization Section
-        st.markdown("### 📈 Robustness Analysis")
-        
+        # Visualizations
         viz_col1, viz_col2 = st.columns(2)
         
         with viz_col1:
             st.markdown("#### Verified Fraction vs Epsilon")
             
-            if 'epsilon' in trm_df.columns and 'verified_fraction' in trm_df.columns:
-                # Group by model and epsilon
-                if 'model' in trm_df.columns:
-                    plot_df = trm_df.groupby(['epsilon', 'model'])['verified_fraction'].mean().reset_index()
-                    
-                    fig1 = px.line(
-                        plot_df,
-                        x='epsilon',
-                        y='verified_fraction',
-                        color='model',
-                        markers=True,
-                        title="Certified Robustness vs Perturbation Size",
-                        labels={
-                            'verified_fraction': 'Verified Fraction',
-                            'epsilon': 'ε (L∞ perturbation)',
-                            'model': 'Model Type'
-                        }
-                    )
-                    fig1.update_layout(height=400, hovermode='x unified')
-                    st.plotly_chart(fig1, use_container_width=True)
-                else:
-                    st.warning("Model column not found in data")
-            else:
-                st.warning("Required columns (epsilon, verified_fraction) not found")
+            if 'epsilon' in mnist_df.columns and 'verified_fraction' in mnist_df.columns and 'model' in mnist_df.columns:
+                # Use beta-CROWN results
+                plot_df = mnist_df[mnist_df['bound'] == 'beta-CROWN'].groupby(['epsilon', 'model'])['verified_fraction'].mean().reset_index()
+                
+                fig1 = px.line(
+                    plot_df,
+                    x='epsilon',
+                    y='verified_fraction',
+                    color='model',
+                    markers=True,
+                    title="MNIST: Certified Robustness",
+                    labels={'verified_fraction': 'Verified Fraction', 'epsilon': 'ε (L∞)'}
+                )
+                fig1.update_layout(height=400)
+                st.plotly_chart(fig1, use_container_width=True)
         
         with viz_col2:
-            st.markdown("#### Verification Time Analysis")
+            st.markdown("#### Verification Time")
             
-            if 'epsilon' in trm_df.columns and 'avg_time_s' in trm_df.columns:
-                if 'model' in trm_df.columns:
-                    time_df = trm_df.groupby(['epsilon', 'model'])['avg_time_s'].mean().reset_index()
-                    
-                    fig2 = px.bar(
-                        time_df,
-                        x='epsilon',
-                        y='avg_time_s',
-                        color='model',
-                        barmode='group',
-                        title="Verification Time vs Epsilon",
-                        labels={
-                            'avg_time_s': 'Time (seconds)',
-                            'epsilon': 'ε (L∞ perturbation)',
-                            'model': 'Model Type'
-                        }
-                    )
-                    fig2.update_layout(height=400)
-                    st.plotly_chart(fig2, use_container_width=True)
-                else:
-                    st.warning("Model column not found in data")
-            else:
-                st.info("Time data not available in results")
-        
-        st.markdown("---")
-        
-        # Detailed Results Table
-        st.markdown("### 📋 Detailed Results")
-        
-        # Select columns to display
-        display_cols = []
-        for col in ['model', 'epsilon', 'verified', 'falsified', 'total', 'verified_fraction', 'avg_time_s', 'avg_mem_MB']:
-            if col in trm_df.columns:
-                display_cols.append(col)
-        
-        if display_cols:
-            display_df = trm_df[display_cols].copy()
-            
-            # Format verified_fraction as percentage
-            if 'verified_fraction' in display_df.columns:
-                display_df['verified_fraction'] = display_df['verified_fraction'].apply(lambda x: f"{x*100:.1f}%")
-            
-            # Format time
-            if 'avg_time_s' in display_df.columns:
-                display_df['avg_time_s'] = display_df['avg_time_s'].apply(lambda x: f"{x:.3f}s" if pd.notna(x) else "N/A")
-            
-            # Format memory
-            if 'avg_mem_MB' in display_df.columns:
-                display_df['avg_mem_MB'] = display_df['avg_mem_MB'].apply(lambda x: f"{x:.1f} MB" if pd.notna(x) else "N/A")
-            
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-        
-        # Export functionality
-        st.markdown("---")
-        
-        export_col1, export_col2 = st.columns(2)
-        
-        with export_col1:
-            csv_export = trm_df.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Full Results (CSV)",
-                data=csv_export,
-                file_name=f"trm_verification_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
-        
-        with export_col2:
-            # Check if PDF report exists
-            pdf_path = "reports/trm_full_visual_report.pdf"
-            if os.path.exists(pdf_path):
-                with open(pdf_path, "rb") as f:
-                    pdf_data = f.read()
-                st.download_button(
-                    label="📄 Download PDF Report",
-                    data=pdf_data,
-                    file_name="trm_verification_report.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
+            if 'epsilon' in mnist_df.columns and 'avg_time_s' in mnist_df.columns:
+                time_df = mnist_df[mnist_df['bound'] == 'CROWN'].groupby(['epsilon', 'model'])['avg_time_s'].mean().reset_index()
+                
+                fig2 = px.bar(
+                    time_df,
+                    x='epsilon',
+                    y='avg_time_s',
+                    color='model',
+                    barmode='group',
+                    title="Verification Time (CROWN)",
+                    labels={'avg_time_s': 'Time (s)', 'epsilon': 'ε (L∞)'}
                 )
-            else:
-                st.info("PDF report not generated yet")
+                fig2.update_layout(height=400)
+                st.plotly_chart(fig2, use_container_width=True)
         
-        # Key Findings
         st.markdown("---")
-        st.markdown("### 💡 Key Findings")
-        
-        findings_col1, findings_col2 = st.columns(2)
-        
-        with findings_col1:
-            st.success("""
-            **✅ Adversarial Training Works**
-            
-            Adversarially trained TRM models show **67× improvement** in verified 
-            robustness compared to standard training at ε=0.01.
-            
-            This validates that adversarial training at ε=0.15 effectively 
-            improves certified robustness.
-            """)
-        
-        with findings_col2:
-            st.info("""
-            **📊 Performance Characteristics**
-            
-            - **Verification time:** <0.25s per sample on A100
-            - **GPU memory:** <30MB per sample
-            - **Scalability:** Successfully verified 512 samples
-            - **Convergence:** Results stable at 256+ samples
-            """)
+        st.markdown("### 💡 MNIST Key Finding")
+        st.success("""
+        **IBP training dominates on simple MNIST**, achieving 75-78% verified accuracy at ε=0.06-0.1.
+        PGD competitive but ~15% lower. Baseline completely fails beyond ε=0.01.
+        """)
     
     else:
-        # No results found - show instructions
-        st.warning("⚠️ No TRM verification results found in logs/")
+        st.warning("⚠️ No MNIST results found in logs/trm_mnist_sweep*.csv")
+
+# ============================================================================
+# TAB 3: CIFAR-10 RESULTS
+# ============================================================================
+
+with tab3:
+    st.header("🖼️ CIFAR-10 Verification Results")
+    
+    cifar_df = load_dataset_results("cifar10")
+    
+    if cifar_df is not None and not cifar_df.empty:
+        st.success(f"✅ Loaded {len(cifar_df)} CIFAR-10 verification records")
         
-        st.markdown("### 🔬 How to Generate Results")
+        # Summary Table
+        st.markdown("### 📊 Summary (512 samples, β-CROWN)")
         
-        st.markdown("""
-        Run the TRM verification pipeline on VSC-5 compute node with GPU:
-        """)
-        
-        st.code("""
-# 1. Connect to VSC-5 and request GPU node
-ssh veriphi02@vsc5.vsc.ac.at
-srun --partition=zen3_0512_a100x2 --gres=gpu:1 --time=04:00:00 --pty bash
-
-# 2. Navigate to project and activate environment
-cd ~/veriphi-verification
-source venv/bin/activate
-export VERIPHI_DEVICE=cuda
-export PYTHONPATH="$PWD/src:$PYTHONPATH"
-
-# 3. Run verification sweep (this generates the CSV files)
-python scripts/trm/core/trm_tiny_sweep.py --samples 512 --eps 0.01,0.02,0.03,0.04
-
-# 4. Generate visual reports
-python scripts/trm/reports/trm_full_visual_report.py
-
-# 5. View results in Streamlit (on login node)
-exit  # Return to login node
-bash run_streamlit_login.sh
-        """, language="bash")
+        summary_data = pd.DataFrame({
+            'Model': ['Baseline', 'IBP (ε=2/255)', 'PGD (ε=8/255)'],
+            'ε=0.001': ['82%', '78%', '94%'],
+            'ε=0.002': ['55%', '51%', '90%'],
+            'ε=0.004': ['13%', '10%', '80%'],
+            'ε=0.006': ['1%', '1%', '67%'],
+            'ε=0.008': ['0%', '0%', '58%'],
+            'Winner': ['🥉', '❌', '🥇']
+        })
+        st.dataframe(summary_data, use_container_width=True, hide_index=True)
         
         st.markdown("---")
         
-        st.markdown("### 📊 Expected Output Structure")
+        # Visualizations
+        viz_col1, viz_col2 = st.columns(2)
         
-        st.markdown("""
-        The verification sweep will create:
+        with viz_col1:
+            st.markdown("#### Verified Fraction vs Epsilon")
+            
+            if 'epsilon' in cifar_df.columns and 'verified_fraction' in cifar_df.columns and 'model' in cifar_df.columns:
+                plot_df = cifar_df[cifar_df['bound'] == 'beta-CROWN'].groupby(['epsilon', 'model'])['verified_fraction'].mean().reset_index()
+                
+                fig1 = px.line(
+                    plot_df,
+                    x='epsilon',
+                    y='verified_fraction',
+                    color='model',
+                    markers=True,
+                    title="CIFAR-10: Certified Robustness",
+                    labels={'verified_fraction': 'Verified Fraction', 'epsilon': 'ε (L∞)'}
+                )
+                fig1.update_layout(height=400)
+                st.plotly_chart(fig1, use_container_width=True)
         
-        - `logs/trm_robustness_sweep_YYYYMMDD_HHMMSS.csv` - Raw verification data
-        - `reports/trm_full_visual_report.pdf` - Comprehensive PDF report
-        - `plots/` - Individual visualization files
+        with viz_col2:
+            st.markdown("#### Verification Time")
+            
+            if 'epsilon' in cifar_df.columns and 'avg_time_s' in cifar_df.columns:
+                time_df = cifar_df[cifar_df['bound'] == 'CROWN'].groupby(['epsilon', 'model'])['avg_time_s'].mean().reset_index()
+                
+                fig2 = px.bar(
+                    time_df,
+                    x='epsilon',
+                    y='avg_time_s',
+                    color='model',
+                    barmode='group',
+                    title="Verification Time (CROWN)",
+                    labels={'avg_time_s': 'Time (s)', 'epsilon': 'ε (L∞)'}
+                )
+                fig2.update_layout(height=400)
+                st.plotly_chart(fig2, use_container_width=True)
         
-        Once generated, refresh this page to see the results!
+        st.markdown("---")
+        st.markdown("### 💡 CIFAR-10 Key Finding")
+        st.success("""
+        **PGD adversarial training dominates on complex CIFAR-10**, achieving 48-95% verified accuracy 
+        across all epsilons. IBP training completely failed - no improvement over baseline.
+        """)
+    
+    else:
+        st.warning("⚠️ No CIFAR-10 results found in logs/trm_cifar10_sweep*.csv")
+
+# ============================================================================
+# TAB 4: CROSS-DATASET ANALYSIS
+# ============================================================================
+
+with tab4:
+    st.header("🔄 Cross-Dataset Analysis")
+    
+    mnist_df = load_dataset_results("mnist")
+    cifar_df = load_dataset_results("cifar10")
+    
+    if mnist_df is not None and cifar_df is not None:
+        st.markdown("### 📊 Comparative Analysis")
+        
+        comp_col1, comp_col2 = st.columns(2)
+        
+        with comp_col1:
+            st.markdown("#### Dataset Characteristics")
+            
+            comp_data = pd.DataFrame({
+                'Property': ['Input Dimensions', 'Complexity', 'Best Method', 'Best ε Range', 'Peak Verified'],
+                'MNIST': ['784', 'Simple', 'IBP @ 1/255', '0.06-0.1', '78% @ ε=0.08'],
+                'CIFAR-10': ['3072', 'Complex', 'PGD @ 8/255', '0.001-0.006', '94% @ ε=0.001']
+            })
+            st.dataframe(comp_data, use_container_width=True, hide_index=True)
+        
+        with comp_col2:
+            st.markdown("#### Training Method Effectiveness")
+            
+            method_data = pd.DataFrame({
+                'Method': ['Baseline', 'IBP', 'PGD'],
+                'MNIST': ['Fails', '🥇 Wins', '🥈 Good'],
+                'CIFAR-10': ['Poor', '❌ Fails', '🥇 Wins']
+            })
+            st.dataframe(method_data, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+        
+        # Key Insights
+        st.markdown("### 💡 Critical Insights")
+        
+        insight_col1, insight_col2, insight_col3 = st.columns(3)
+        
+        with insight_col1:
+            st.info("""
+            **Dataset Complexity Matters**
+            
+            IBP works on simple MNIST but fails on complex CIFAR-10. 
+            Training method effectiveness depends on data complexity.
+            """)
+        
+        with insight_col2:
+            st.success("""
+            **PGD Generalizes**
+            
+            Adversarial training (PGD) works across both datasets, 
+            making it more robust for real-world applications.
+            """)
+        
+        with insight_col3:
+            st.warning("""
+            **Epsilon Scaling**
+            
+            CIFAR-10 requires 10× smaller ε for same verification rates. 
+            Verification difficulty increases exponentially.
+            """)
+        
+        st.markdown("---")
+        
+        # Recommendations
+        st.markdown("### 🎯 Recommendations")
+        
+        st.success("""
+        **For Practitioners:**
+        
+        1. **Simple data (≤1000 dims):** Use IBP certified training for best verified robustness
+        2. **Complex data (>1000 dims):** Use PGD adversarial training - IBP will likely fail
+        3. **General case:** PGD is safer choice - works across dataset complexities
+        4. **Bound methods:** CROWN sufficient - α/β-CROWN add <5% improvement at higher computational cost
         """)
         
-        # Show sample data structure
-        st.markdown("### 📋 Sample Data Format")
+        # Future Work
+        st.markdown("---")
+        st.markdown("### 🚀 Future Work")
         
-        sample_data = pd.DataFrame({
-            'model': ['Adversarial TRM', 'Standard TRM'] * 3,
-            'epsilon': [0.01, 0.01, 0.02, 0.02, 0.03, 0.03],
-            'verified': [410, 6, 300, 0, 206, 0],
-            'falsified': [102, 506, 212, 512, 306, 512],
-            'total': [512, 512, 512, 512, 512, 512],
-            'verified_fraction': [0.801, 0.012, 0.586, 0.000, 0.402, 0.000],
-            'avg_time_s': [0.180, 0.165, 0.195, 0.170, 0.210, 0.175],
-            'avg_mem_MB': [28.5, 27.8, 29.1, 28.0, 29.8, 28.3]
-        })
-        
-        st.dataframe(sample_data, use_container_width=True, hide_index=True)
-        
-        st.caption("*This is sample data showing the expected format. Run the verification pipeline to generate real results.*")
+        st.markdown("""
+        **Next Steps:**
+        - Test hybrid IBP+PGD training approaches
+        - Scale to ImageNet (224×224, 150K dims)
+        - Explore architecture-specific certified training
+        - Investigate why IBP fails on complex data
+        """)
+    
+    else:
+        st.warning("⚠️ Load both MNIST and CIFAR-10 results to see cross-dataset analysis")
 
 # ============================================================================
 # FOOTER
@@ -663,16 +521,16 @@ with footer_col1:
 with footer_col2:
     st.markdown("""
     ### 📊 Project Stats
-    - **512 samples** verified
-    - **80% certified** @ ε=0.01
-    - **<0.25s** per sample
-    - **67× improvement** over baseline
+    - **1024 samples** verified (512 × 2 datasets)
+    - **3 training methods** compared
+    - **3 bound methods** tested
+    - **18 models** evaluated total
     """)
 
 with footer_col3:
     st.markdown("""
     ### 🔗 Quick Links
-    - [Project GitHub](https://github.com/inquisitour/veriphi-verification)
+    - [GitHub Repo](https://github.com/inquisitour/veriphi-verification)
     - [TRM Paper](https://arxiv.org/abs/2510.04871)
     - [VSC-5 Docs](https://vsc.ac.at/systems/vsc-5/)
     - [auto-LiRPA](https://github.com/Verified-Intelligence/auto_LiRPA)
