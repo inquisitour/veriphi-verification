@@ -334,9 +334,28 @@ class BelugaDataset(torch.utils.data.Dataset):
         
         if len(self.problem_files) == 0:
             raise ValueError(f"No JSON files found in {split_dir}")
+
+        # Get first problem to check dimensions
+        with open(self.problem_files[0], 'r') as f:
+            first_data = json.load(f)
+            self.target_jigs = len(first_data['jigs'])
+            self.target_flights = len(first_data['flights'])
+            self.target_racks = len(first_data['racks'])
         
-        print(f"✅ Loaded {len(self.problem_files)} problems from {split} split")
-    
+        # Filter to only problems with matching dimensions
+        filtered_files = []
+        for pf in self.problem_files:
+            with open(pf, 'r') as f:
+                data = json.load(f)
+                if (len(data['jigs']) == self.target_jigs and 
+                    len(data['flights']) == self.target_flights and
+                    len(data['racks']) == self.target_racks):
+                    filtered_files.append(pf)
+        
+        self.problem_files = filtered_files
+        
+        print(f"✅ Loaded {len(self.problem_files)} problems from {split} split (filtered by dimensions)")
+            
     def __len__(self) -> int:
         return len(self.problem_files)
     
