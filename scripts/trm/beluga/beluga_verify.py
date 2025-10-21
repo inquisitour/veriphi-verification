@@ -20,8 +20,8 @@ if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
 from core import create_core_system
-from src.beluga.data_loader import BelugaProblem, create_beluga_dataloader
-from src.beluga.trm_beluga_model import create_beluga_trm, get_model_dims_from_problem
+from core.models.beluga_data_loader import BelugaProblem, create_beluga_dataloader
+from core.models.beluga_trm_model import create_beluga_trm, get_model_dims_from_problem
 
 DEVICE = torch.device(os.environ.get("VERIPHI_DEVICE", "cuda" if torch.cuda.is_available() else "cpu"))
 
