@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# scripts/beluga/beluga_verify.py
 """
 Formal Verification of BelugaTRM Logistics Solutions
 Uses Veriphi attack-guided verification with α/β-CROWN to prove robustness
