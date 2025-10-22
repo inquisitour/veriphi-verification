@@ -39,18 +39,22 @@ def check_constraint_satisfaction(model, problem, state_tensor, device=DEVICE):
     with torch.no_grad():
         logits = model(state_tensor)
         total_loss = model.compute_constraint_loss(logits, problem)
-        
-        # Get constraint breakdown
-        assignments = torch.argmax(logits.view(1, model.num_jigs, model.action_space), dim=-1)[0]
+
+        # Define probs and jig_mask BEFORE constraint_losses dict
         probs = torch.softmax(logits.view(1, model.num_jigs, model.action_space), dim=-1)[0]
         
+        # Create jig mask
+        actual_num_jigs = problem.num_jigs
+        jig_mask = torch.zeros(model.num_jigs, dtype=torch.bool, device=DEVICE)
+        jig_mask[:actual_num_jigs] = True
+
         constraint_losses = {
             'total': total_loss.item(),
-            'flight_capacity': model._compute_flight_capacity_loss(assignments, problem, probs).item(),
-            'rack_capacity': model._compute_rack_capacity_loss(assignments, problem, probs).item(),
-            'schedule': model._compute_schedule_constraint_loss(assignments, problem, probs).item(),
-            'balance': model._compute_flight_balance_loss(assignments, problem, probs).item(),
-            'type_matching': model._compute_type_matching_loss(assignments, problem, probs).item()
+            'flight_capacity': model._compute_flight_capacity_loss(probs, problem, jig_mask).item(),
+            'rack_capacity': model._compute_rack_capacity_loss(probs, problem, jig_mask).item(),
+            'schedule': model._compute_schedule_constraint_loss(probs, problem, jig_mask).item(),
+            'balance': model._compute_flight_balance_loss(probs, problem, jig_mask).item(),
+            'type_matching': model._compute_type_matching_loss(probs, problem, jig_mask).item()
         }
     
     # Solution is feasible if total constraint loss is below threshold

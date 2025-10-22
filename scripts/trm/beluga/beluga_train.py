@@ -2,6 +2,8 @@
 """
 Train BelugaTRM on Airbus logistics constraint satisfaction problems
 Optimizes jig assignments to satisfy flight, rack, and schedule constraints
+
+Correct AMP scaler usage following PyTorch best practices
 """
 
 import os
@@ -65,11 +67,16 @@ def evaluate_model(model, dataloader, epoch, device=DEVICE):
             assignments = torch.argmax(logits.view(1, model.num_jigs, model.action_space), dim=-1)
             probs = torch.softmax(logits.view(1, model.num_jigs, model.action_space), dim=-1)
             
-            total_flight_cap += model._compute_flight_capacity_loss(assignments[0], problem, probs[0]).item()
-            total_rack_cap += model._compute_rack_capacity_loss(assignments[0], problem, probs[0]).item()
-            total_schedule += model._compute_schedule_constraint_loss(assignments[0], problem, probs[0]).item()
-            total_balance += model._compute_flight_balance_loss(assignments[0], problem, probs[0]).item()
-            total_type_match += model._compute_type_matching_loss(assignments[0], problem, probs[0]).item()
+            # Create jig mask for individual constraint loss computation
+            actual_num_jigs = problem.num_jigs
+            jig_mask = torch.zeros(model.num_jigs, dtype=torch.bool, device=device)
+            jig_mask[:actual_num_jigs] = True
+            
+            total_flight_cap += model._compute_flight_capacity_loss(probs[0], problem, jig_mask).item()
+            total_rack_cap   += model._compute_rack_capacity_loss(probs[0], problem, jig_mask).item()
+            total_schedule   += model._compute_schedule_constraint_loss(probs[0], problem, jig_mask).item()
+            total_balance    += model._compute_flight_balance_loss(probs[0], problem, jig_mask).item()
+            total_type_match += model._compute_type_matching_loss(probs[0], problem, jig_mask).item()
             
             num_batches += 1
     
@@ -158,19 +165,32 @@ def main():
     print(f"   Model on device: {next(model.parameters()).device}")
     
     # Optimizer and scheduler
-    opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.01)
+    opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.0)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs, eta_min=1e-6)
+
+    checkpoint_path = os.path.join(args.checkpoint_dir, 'beluga_trm_best.pt')
+    start_epoch = 1
+    if os.path.exists(checkpoint_path):
+        print(f"📂 Loading checkpoint from {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        opt.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        print(f"   Resuming from epoch {start_epoch}")
     
-    # AMP for faster training on GPU
-    scaler = torch.cuda.amp.GradScaler(enabled=(DEVICE.type == "cuda"))
+    # AMP disabled due to scaler initialization bug in PyTorch
+    use_amp = False
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     
     print(f"\n🔥 Starting training...")
+    print(f"   AMP enabled: {use_amp}")
     print(f"=" * 60)
     
     best_loss = float('inf')
     training_log = []
     
-    for ep in range(1, epochs + 1):
+    for ep in range(start_epoch, epochs + 1):
         model.train()
         total_loss = 0.0
         total_flight_cap = 0.0
@@ -190,17 +210,24 @@ def main():
             # Training step
             opt.zero_grad(set_to_none=True)
             
-            with torch.cuda.amp.autocast(enabled=(DEVICE.type == "cuda")):
+            # Correct AMP pattern following PyTorch docs
+            # https://pytorch.org/docs/stable/notes/amp_examples.html
+            with torch.cuda.amp.autocast(enabled=use_amp):
                 # Forward pass
                 logits = model(state_batch)
                 
                 # Compute constraint loss
                 loss = model.compute_constraint_loss(logits, problem)
             
-            # Backward pass
+            # ----- backward + clip + step (no AMP) -----
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+            # single clipping step
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
+            print(f"   grad_norm={float(grad_norm):.6f}")
+
             opt.step()
+            # -------------------------------------------
             
             total_loss += loss.item()
             
@@ -209,11 +236,16 @@ def main():
                 assignments = torch.argmax(logits.view(1, model.num_jigs, model.action_space), dim=-1)
                 probs = torch.softmax(logits.view(1, model.num_jigs, model.action_space), dim=-1)
                 
-                total_flight_cap += model._compute_flight_capacity_loss(assignments[0], problem, probs[0]).item()
-                total_rack_cap += model._compute_rack_capacity_loss(assignments[0], problem, probs[0]).item()
-                total_schedule += model._compute_schedule_constraint_loss(assignments[0], problem, probs[0]).item()
-                total_balance += model._compute_flight_balance_loss(assignments[0], problem, probs[0]).item()
-                total_type_match += model._compute_type_matching_loss(assignments[0], problem, probs[0]).item()
+                # Create jig mask for individual constraint loss computation
+                actual_num_jigs = problem.num_jigs
+                jig_mask = torch.zeros(model.num_jigs, dtype=torch.bool, device=DEVICE)
+                jig_mask[:actual_num_jigs] = True
+                
+                total_flight_cap += model._compute_flight_capacity_loss(probs[0], problem, jig_mask).item()
+                total_rack_cap   += model._compute_rack_capacity_loss(probs[0], problem, jig_mask).item()
+                total_schedule   += model._compute_schedule_constraint_loss(probs[0], problem, jig_mask).item()
+                total_balance    += model._compute_flight_balance_loss(probs[0], problem, jig_mask).item()
+                total_type_match += model._compute_type_matching_loss(probs[0], problem, jig_mask).item()
             
             num_batches += 1
         

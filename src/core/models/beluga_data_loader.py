@@ -11,8 +11,8 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
-#DEVICE = torch.device(os.environ.get("VERIPHI_DEVICE", "cuda" if torch.cuda.is_available() else "cpu"))
 DEVICE = torch.device("cpu")
+
 
 @dataclass
 class BelugaProblem:
@@ -41,6 +41,11 @@ class BelugaProblem:
     _rack_features: Optional[torch.Tensor] = None
     _constraint_matrix: Optional[torch.Tensor] = None
     
+    # Max dimensions for padding (set by dataset)
+    max_jigs: Optional[int] = None
+    max_flights: Optional[int] = None
+    max_racks: Optional[int] = None
+    
     @classmethod
     def from_json(cls, filepath: str) -> 'BelugaProblem':
         """Load problem from JSON file"""
@@ -65,19 +70,12 @@ class BelugaProblem:
             num_production_lines=len(data['production_lines'])
         )
     
-    def get_jig_features(self) -> torch.Tensor:
+    def get_jig_features(self, pad_to: Optional[int] = None) -> torch.Tensor:
         """
-        Encode all jigs as feature tensors
-        Returns: [num_jigs, jig_feature_dim]
-        
-        Features per jig:
-        - type_one_hot: 5 dims (typeA-E)
-        - empty_flag: 1 dim (binary)
-        - size_empty: 1 dim (normalized)
-        - size_loaded: 1 dim (normalized)
-        Total: 8 dims per jig
+        Encode all jigs as feature tensors with optional padding
+        Returns: [num_jigs or pad_to, jig_feature_dim]
         """
-        if self._jig_features is not None:
+        if self._jig_features is not None and pad_to is None:
             return self._jig_features
         
         # Type mapping
@@ -107,23 +105,24 @@ class BelugaProblem:
             jig_feat = type_onehot + empty_flag + size_empty_norm + size_loaded_norm
             features.append(jig_feat)
         
-        self._jig_features = torch.tensor(features, dtype=torch.float32, device=DEVICE)
-        return self._jig_features
-    
-    def get_flight_features(self) -> torch.Tensor:
-        """
-        Encode all flights as feature tensors
-        Returns: [num_flights, flight_feature_dim]
+        jig_tensor = torch.tensor(features, dtype=torch.float32, device=DEVICE)
         
-        Features per flight:
-        - incoming_count: 1 dim (number of incoming jigs)
-        - outgoing_count: 1 dim (number of outgoing jig types requested)
-        - total_incoming_volume: 1 dim (sum of sizes, normalized)
-        - total_outgoing_volume_required: 1 dim (normalized)
-        - cargo_balance: 1 dim (outgoing - incoming, can be negative)
-        Total: 5 dims per flight
+        # Pad if requested
+        if pad_to is not None and pad_to > jig_tensor.size(0):
+            padding = torch.zeros(pad_to - jig_tensor.size(0), jig_tensor.size(1), device=DEVICE)
+            jig_tensor = torch.cat([jig_tensor, padding], dim=0)
+        
+        if pad_to is None:
+            self._jig_features = jig_tensor
+        
+        return jig_tensor
+    
+    def get_flight_features(self, pad_to: Optional[int] = None) -> torch.Tensor:
         """
-        if self._flight_features is not None:
+        Encode all flights as feature tensors with optional padding
+        Returns: [num_flights or pad_to, flight_feature_dim]
+        """
+        if self._flight_features is not None and pad_to is None:
             return self._flight_features
         
         # Compute max volumes for normalization
@@ -140,14 +139,13 @@ class BelugaProblem:
             max_volume = max(max_volume, incoming_vol, outgoing_vol)
         
         if max_volume == 0:
-            max_volume = 1.0  # Avoid division by zero
+            max_volume = 1.0
         
         features = []
         for flight in self.flights:
             incoming_count = len(flight['incoming'])
             outgoing_count = len(flight['outgoing'])
             
-            # Calculate volumes
             incoming_vol = sum(
                 self.jig_types[self.jigs[jig_name]['type']]['size_loaded']
                 for jig_name in flight['incoming']
@@ -158,7 +156,6 @@ class BelugaProblem:
                 for jig_type in flight['outgoing']
             ) if outgoing_count > 0 else 0.0
             
-            # Normalize and compute balance
             incoming_vol_norm = incoming_vol / max_volume
             outgoing_vol_norm = outgoing_vol / max_volume
             cargo_balance = outgoing_vol_norm - incoming_vol_norm
@@ -172,23 +169,24 @@ class BelugaProblem:
             ]
             features.append(flight_feat)
         
-        self._flight_features = torch.tensor(features, dtype=torch.float32, device=DEVICE)
-        return self._flight_features
-    
-    def get_rack_features(self) -> torch.Tensor:
-        """
-        Encode all racks as feature tensors
-        Returns: [num_racks, rack_feature_dim]
+        flight_tensor = torch.tensor(features, dtype=torch.float32, device=DEVICE)
         
-        Features per rack:
-        - capacity: 1 dim (normalized)
-        - current_load: 1 dim (sum of jig sizes, normalized)
-        - available_space: 1 dim (capacity - load, normalized)
-        - num_jigs_stored: 1 dim (count)
-        - utilization: 1 dim (load / capacity)
-        Total: 5 dims per rack
+        # Pad if requested
+        if pad_to is not None and pad_to > flight_tensor.size(0):
+            padding = torch.zeros(pad_to - flight_tensor.size(0), flight_tensor.size(1), device=DEVICE)
+            flight_tensor = torch.cat([flight_tensor, padding], dim=0)
+        
+        if pad_to is None:
+            self._flight_features = flight_tensor
+        
+        return flight_tensor
+    
+    def get_rack_features(self, pad_to: Optional[int] = None) -> torch.Tensor:
         """
-        if self._rack_features is not None:
+        Encode all racks as feature tensors with optional padding
+        Returns: [num_racks or pad_to, rack_feature_dim]
+        """
+        if self._rack_features is not None and pad_to is None:
             return self._rack_features
         
         max_capacity = max(rack['size'] for rack in self.racks)
@@ -197,7 +195,6 @@ class BelugaProblem:
         for rack in self.racks:
             capacity = rack['size']
             
-            # Calculate current load
             current_load = 0.0
             for jig_name in rack['jigs']:
                 jig_type = self.jigs[jig_name]['type']
@@ -218,57 +215,70 @@ class BelugaProblem:
             ]
             features.append(rack_feat)
         
-        self._rack_features = torch.tensor(features, dtype=torch.float32, device=DEVICE)
-        return self._rack_features
-    
-    def get_production_schedule_features(self) -> torch.Tensor:
-        """
-        Encode production schedule as temporal features
-        Returns: [num_jigs, schedule_feature_dim]
+        rack_tensor = torch.tensor(features, dtype=torch.float32, device=DEVICE)
         
-        Features per jig:
-        - production_line_id: 1 dim (which line, normalized)
-        - schedule_position: 1 dim (position in queue, normalized)
-        - is_scheduled: 1 dim (binary flag)
-        Total: 3 dims per jig
+        # Pad if requested
+        if pad_to is not None and pad_to > rack_tensor.size(0):
+            padding = torch.zeros(pad_to - rack_tensor.size(0), rack_tensor.size(1), device=DEVICE)
+            rack_tensor = torch.cat([rack_tensor, padding], dim=0)
+        
+        if pad_to is None:
+            self._rack_features = rack_tensor
+        
+        return rack_tensor
+    
+    def get_production_schedule_features(self, pad_to: Optional[int] = None) -> torch.Tensor:
+        """
+        Encode production schedule as temporal features with optional padding
+        Returns: [num_jigs or pad_to, schedule_feature_dim]
         """
         features = []
         jig_to_position = {}
         
-        # Build schedule mapping
         for pl_idx, pl in enumerate(self.production_lines):
             for pos, jig_name in enumerate(pl['schedule']):
                 jig_to_position[jig_name] = (pl_idx, pos)
         
         max_position = max((pos for _, pos in jig_to_position.values()), default=1)
+        max_position = max(max_position, 1)  # Ensure at least 1 to avoid division by zero
         num_lines = len(self.production_lines)
         
         for jig_name in sorted(self.jigs.keys()):
             if jig_name in jig_to_position:
                 pl_idx, pos = jig_to_position[jig_name]
                 jig_feat = [
-                    pl_idx / max(num_lines - 1, 1),  # Normalized line ID
-                    pos / max_position,  # Normalized position
-                    1.0  # Is scheduled
+                    pl_idx / max(num_lines - 1, 1),
+                    pos / max_position,
+                    1.0
                 ]
             else:
-                jig_feat = [0.0, 0.0, 0.0]  # Not scheduled
+                jig_feat = [0.0, 0.0, 0.0]
             
             features.append(jig_feat)
         
-        return torch.tensor(features, dtype=torch.float32, device=DEVICE)
+        schedule_tensor = torch.tensor(features, dtype=torch.float32, device=DEVICE)
+        
+        # Pad if requested
+        if pad_to is not None and pad_to > schedule_tensor.size(0):
+            padding = torch.zeros(pad_to - schedule_tensor.size(0), schedule_tensor.size(1), device=DEVICE)
+            schedule_tensor = torch.cat([schedule_tensor, padding], dim=0)
+        
+        return schedule_tensor
     
     def get_full_state_tensor(self) -> torch.Tensor:
         """
-        Combine all features into a single flattened state tensor
+        Combine all features into a single flattened state tensor with padding
         Returns: [1, total_feature_dim]
-        
-        This is the main input to the TRM model
         """
-        jig_feats = self.get_jig_features()  # [num_jigs, 8]
-        flight_feats = self.get_flight_features()  # [num_flights, 5]
-        rack_feats = self.get_rack_features()  # [num_racks, 5]
-        schedule_feats = self.get_production_schedule_features()  # [num_jigs, 3]
+        # Use padding if max dimensions are set
+        pad_jigs = self.max_jigs if self.max_jigs is not None else self.num_jigs
+        pad_flights = self.max_flights if self.max_flights is not None else self.num_flights
+        pad_racks = self.max_racks if self.max_racks is not None else self.num_racks
+        
+        jig_feats = self.get_jig_features(pad_to=pad_jigs)
+        flight_feats = self.get_flight_features(pad_to=pad_flights)
+        rack_feats = self.get_rack_features(pad_to=pad_racks)
+        schedule_feats = self.get_production_schedule_features(pad_to=pad_jigs)
         
         # Global features
         global_feats = torch.tensor([
@@ -279,13 +289,13 @@ class BelugaProblem:
             float(self.num_flights),
             float(self.num_racks),
             float(self.num_production_lines)
-        ], dtype=torch.float32, device=DEVICE).unsqueeze(0)  # [1, 7]
+        ], dtype=torch.float32, device=DEVICE).unsqueeze(0)
         
         # Flatten and concatenate
-        jig_flat = jig_feats.flatten().unsqueeze(0)  # [1, num_jigs * 8]
-        schedule_flat = schedule_feats.flatten().unsqueeze(0)  # [1, num_jigs * 3]
-        flight_flat = flight_feats.flatten().unsqueeze(0)  # [1, num_flights * 5]
-        rack_flat = rack_feats.flatten().unsqueeze(0)  # [1, num_racks * 5]
+        jig_flat = jig_feats.flatten().unsqueeze(0)
+        schedule_flat = schedule_feats.flatten().unsqueeze(0)
+        flight_flat = flight_feats.flatten().unsqueeze(0)
+        rack_flat = rack_feats.flatten().unsqueeze(0)
         
         full_state = torch.cat([
             global_feats,
@@ -293,23 +303,12 @@ class BelugaProblem:
             schedule_flat,
             flight_flat,
             rack_flat
-        ], dim=1)  # [1, total_dim]
+        ], dim=1)
         
         return full_state
     
     def get_constraint_violations(self, solution: torch.Tensor) -> torch.Tensor:
-        """
-        Compute constraint violations for a proposed solution
-        Used as loss function during training
-        
-        Args:
-            solution: [num_jigs, action_space] - proposed jig assignments
-        
-        Returns:
-            violation_score: scalar tensor (0 = all constraints satisfied)
-        """
-        # Placeholder - will implement constraint checking logic
-        # For now, return dummy value
+        """Placeholder for constraint violations"""
         return torch.tensor(0.0, device=DEVICE)
 
 
@@ -325,7 +324,7 @@ class BelugaDataset(torch.utils.data.Dataset):
         self.data_dir = Path(data_dir)
         self.split = split
         
-        # Find all JSON files in the split directory
+        # Find all JSON files
         split_dir = self.data_dir / split
         if not split_dir.exists():
             raise ValueError(f"Split directory not found: {split_dir}")
@@ -334,38 +333,41 @@ class BelugaDataset(torch.utils.data.Dataset):
         
         if len(self.problem_files) == 0:
             raise ValueError(f"No JSON files found in {split_dir}")
-
-        # Get first problem to check dimensions
-        with open(self.problem_files[0], 'r') as f:
-            first_data = json.load(f)
-            self.target_jigs = len(first_data['jigs'])
-            self.target_flights = len(first_data['flights'])
-            self.target_racks = len(first_data['racks'])
         
-        # Filter to only problems with matching dimensions
-        filtered_files = []
+        # Find max dimensions across ALL problems
+        print(f"📏 Analyzing dataset dimensions...")
+        self.max_jigs = 0
+        self.max_flights = 0
+        self.max_racks = 0
+        
         for pf in self.problem_files:
             with open(pf, 'r') as f:
                 data = json.load(f)
-                if (len(data['jigs']) == self.target_jigs and 
-                    len(data['flights']) == self.target_flights and
-                    len(data['racks']) == self.target_racks):
-                    filtered_files.append(pf)
+                self.max_jigs = max(self.max_jigs, len(data['jigs']))
+                self.max_flights = max(self.max_flights, len(data['flights']))
+                self.max_racks = max(self.max_racks, len(data['racks']))
         
-        self.problem_files = filtered_files
-        
-        print(f"✅ Loaded {len(self.problem_files)} problems from {split} split (filtered by dimensions)")
-            
+        print(f"   Max jigs: {self.max_jigs}")
+        print(f"   Max flights: {self.max_flights}")
+        print(f"   Max racks: {self.max_racks}")
+        print(f"✅ Loaded {len(self.problem_files)} problems from {split} split")
+    
     def __len__(self) -> int:
         return len(self.problem_files)
     
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, BelugaProblem]:
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, 'BelugaProblem']:
         """
         Returns:
             state_tensor: [1, total_feature_dim] - input for TRM
             problem: BelugaProblem instance for constraint checking
         """
         problem = BelugaProblem.from_json(str(self.problem_files[idx]))
+        
+        # Set max dimensions for padding
+        problem.max_jigs = self.max_jigs
+        problem.max_flights = self.max_flights
+        problem.max_racks = self.max_racks
+        
         state_tensor = problem.get_full_state_tensor()
         
         return state_tensor, problem
@@ -382,7 +384,7 @@ def create_beluga_dataloader(
     Create DataLoader for Beluga dataset
     
     Args:
-        data_dir: Path to Beluga dataset root (e.g., 'data/beluga/deterministic')
+        data_dir: Path to Beluga dataset root
         split: "training" or "validation"
         batch_size: Batch size (typically 1 for constraint problems)
         shuffle: Whether to shuffle data
@@ -398,7 +400,7 @@ def create_beluga_dataloader(
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
-        pin_memory=(DEVICE.type == "cuda")
+        pin_memory=False
     )
 
 
