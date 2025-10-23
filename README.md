@@ -182,6 +182,62 @@ python scripts/trm/reports/trm_compare_bounds_report.py
 
 ---
 
+## 🚀 Beluga Logistics Verification
+
+### Dataset
+Real-world Airbus Beluga constraint satisfaction problems from TUPLES AI Challenge:
+- **270 logistics problems** (69-821 jigs, 43-199 flights each)
+- **5 constraint types:** capacity, jig matching, type matching, exclusivity, multi-trip
+- **Model:** 105.8M parameter TRM
+
+### Training
+```bash
+# Train Beluga TRM (rebalanced constraints)
+python scripts/beluga/train_beluga.py \
+  --epochs 50 \
+  --batch_size 32 \
+  --device cuda
+
+# Monitor with TensorBoard
+tensorboard --logdir runs/beluga
+```
+
+**Output:** Checkpoint saved to `checkpoints/beluga_trm_105M.pt`
+
+### Verification
+```bash
+# Single sample verification
+python scripts/beluga/verify_beluga_sample.py \
+  --checkpoint checkpoints/beluga_trm_105M.pt \
+  --sample_idx 0
+
+# Batch verification sweep
+python scripts/beluga/verify_beluga_sweep.py \
+  --checkpoint checkpoints/beluga_trm_105M.pt \
+  --samples 50 \
+  --timeout 300
+```
+
+### Profiling
+```bash
+# Profile with Nsight Systems
+nsys profile -o beluga_profile \
+  python scripts/beluga/verify_beluga_sample.py \
+    --checkpoint checkpoints/beluga_trm_105M.pt
+
+# View timeline
+nsys-ui beluga_profile.qdrep
+```
+
+### Results
+
+**Performance:**
+- Verification: **2.6s per sample** (A100)
+- Training loss: 930 → 2.26
+- Memory: Efficient at 105M scale
+
+---
+
 ## 🏗️ Architecture Overview
 
 ```
