@@ -272,7 +272,7 @@ reports/              # PDF reports
 - **α,β‑CROWN Repo:** https://github.com/Verified-Intelligence/alpha-beta-CROWN  
 - **Tiny Recursive Models:** https://github.com/SamsungSAILMontreal/TinyRecursiveModels  
 - **VNN‑COMP:** https://sites.google.com/view/vnn2024  
-- **TUPLES Challenge:** https://arxiv.org/abs/2510.04871
+- **TUPLES Challenge:** https://github.com/TUPLES-Trustworthy-AI/Beluga-AI-Challenge
 
 ---
 
