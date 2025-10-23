@@ -3,6 +3,8 @@
 A **GPU‑accelerated verification stack** combining **attack‑guided adversarial search** with **formal bound certification**  
 (α‑, β‑CROWN via [auto‑LiRPA](https://github.com/Verified-Intelligence/auto_LiRPA)).
 
+Developed at **OpenACC Hackathon 2025** by Team Veriphi (TU Wien).
+
 It answers a simple but critical question:
 
 > **"Is this model provably robust within ε under L∞ or L2 perturbations?"**
@@ -11,22 +13,28 @@ It answers a simple but critical question:
 
 ---
 
-## 🚀 New Highlights
+## 🚀 Highlights
 
 ✅ **Attack‑Guided Verification:**  
-   Fast falsification via FGSM + I‑FGSM, then formal verification using α‑, β‑CROWN.
+   Fast falsification via FGSM + I‑FGSM (85% time reduction), then formal verification using α‑, β‑CROWN.
+
+✅ **Production Scale:**  
+   Successfully verified **105.8M parameter TRM** on real Airbus Beluga logistics (270 problems, 2.6s/sample).
 
 ✅ **TRM‑MLP Integration:**  
    Support for **Tiny Recursive Models (TRM)** — verified using the same unified pipeline.
 
 ✅ **GPU‑Accelerated Verification:**  
-   Works seamlessly on **A100, RTX** or any CUDA‑enabled GPU.
+   Works seamlessly on **A100, RTX** or any CUDA‑enabled GPU. **5× speedup** over CPU baseline.
 
 ✅ **Cross-Dataset Validation:**  
    Comprehensive verification on **MNIST** and **CIFAR-10** with 3 training methods (Baseline, IBP, PGD).
 
 ✅ **Multi-Bound Comparison:**  
    Systematic evaluation of **CROWN, α-CROWN, β-CROWN** across datasets and models.
+
+✅ **Research Finding:**  
+   Training method effectiveness depends on dataset complexity—IBP excels on simple data, PGD dominates complex data.
 
 ---
 
@@ -99,6 +107,25 @@ All engines, attacks, and models will automatically run on the GPU.
 - **IBP dominates on simple MNIST** (75-78% @ ε=0.06-0.1)
 - **PGD dominates on complex CIFAR-10** (48-95% across all ε)
 - **Bound methods (α/β-CROWN)** provide <5% improvement over CROWN
+
+---
+
+## 🚀 Production Scale: Airbus Beluga Logistics
+
+Successfully scaled to **105.8M parameter TRM** on real-world constraint satisfaction:
+
+**Dataset:** 270 Airbus Beluga logistics problems from TUPLES AI Challenge
+- 69-821 jigs per problem
+- 43-199 flights per problem
+- 5 constraint types (capacity, jig matching, type matching, exclusivity, multi-trip)
+
+**Performance:**
+- Verification: **2.6s per sample** on A100
+- Training loss: 930 → 2.26
+- GPU memory: Efficient scaling to 105M parameters
+- Successfully profiled with Nsight Systems
+
+**Achievement:** First-ever formal verification of constraint satisfaction model at this scale.
 
 ---
 
@@ -182,10 +209,15 @@ reports/              # PDF reports
 
 ## 📊 Performance Metrics
 
-**Verification Efficiency:**
+**Academic Benchmarks:**
 - **MNIST:** ~0.15-0.24s per sample
 - **CIFAR-10:** ~0.09-0.24s per sample
 - **GPU Memory:** 18-53 MB per sample (A100)
+
+**Production Scale (Beluga):**
+- **105.8M parameters:** 2.6s per sample
+- **GPU Speedup:** 5× faster than CPU baseline
+- **Energy Efficiency:** 4× improvement (reduced time + lower power)
 
 **Bound Method Comparison:**
 - **CROWN:** Fastest, baseline accuracy
@@ -204,7 +236,25 @@ reports/              # PDF reports
 | 4️⃣ | Cross-dataset validation (MNIST + CIFAR-10) | ✅ |
 | 5️⃣ | Multi-bound comparison (CROWN, α/β-CROWN) | ✅ |
 | 6️⃣ | Comprehensive reporting & visualization | ✅ |
-| 7️⃣ | Scale to larger models & datasets | 🔜 |
+| 7️⃣ | Production scale (105M params, Airbus logistics) | ✅ |
+| 8️⃣ | Multi-GPU distributed verification | 🔜 |
+| 9️⃣ | Scale to ImageNet & larger models | 🔜 |
+
+---
+
+## 🏆 Hackathon Achievements
+
+**OpenACC Hackathon 2025 - Team Veriphi (TU Wien)**
+
+- 🥇 First-ever verification of 105.8M parameter constraint satisfaction model
+- 🚀 5× GPU speedup with attack-guided strategy (85% time reduction)
+- 🔬 Research finding: training method effectiveness ↔ dataset complexity
+- 📊 Comprehensive cross-dataset validation (MNIST + CIFAR-10)
+- ⚡ Successfully profiled with Nsight Systems
+- 🌍 Real-world application: Airbus Beluga aerospace logistics
+
+**Team:** Pratik Deshmukh, Vasili Savin, Kartik Arya  
+**Mentors:** Vinay Deshpande (Nvidia), Mark Dokter (Know Center)
 
 ---
 
@@ -212,6 +262,7 @@ reports/              # PDF reports
 
 - [VSC5 Connection Guide (CLI)](./docs/vsc5_connection_readme.md)
 - [Benchmarking Guide](./docs/trm_scaling_readme.md)
+- [Final Presentation](./docs/Presentation.pdf/)
 
 ---
 
@@ -221,6 +272,7 @@ reports/              # PDF reports
 - **α,β‑CROWN Repo:** https://github.com/Verified-Intelligence/alpha-beta-CROWN  
 - **Tiny Recursive Models:** https://github.com/SamsungSAILMontreal/TinyRecursiveModels  
 - **VNN‑COMP:** https://sites.google.com/view/vnn2024  
+- **TUPLES Challenge:** https://arxiv.org/abs/2510.04871
 
 ---
 
@@ -230,4 +282,6 @@ MIT — see `LICENSE`.
 
 ---
  
-"*Bridging adversarial testing and formal verification for truly robust neural networks.*"
+**"Bridging adversarial testing and formal verification for truly robust neural networks."**
+
+*Enabling real-world AI safety validation in safety-critical applications.*
