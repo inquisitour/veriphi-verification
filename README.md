@@ -174,12 +174,6 @@ python scripts/trm/reports/trm_full_visual_report_cifar10.py
 python scripts/trm/reports/trm_compare_bounds_report.py
 ```
 
-**Generated outputs:**
-- `reports/trm_mnist_full_report_*.pdf` - MNIST analysis
-- `reports/trm_cifar10_full_report_*.pdf` - CIFAR-10 analysis
-- `reports/trm_compare_bounds_report_*.pdf` - Cross-bound comparison
-- `plots/` - Individual visualization files
-
 ---
 
 ## 🚀 Beluga Logistics Verification
