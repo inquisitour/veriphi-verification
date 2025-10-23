@@ -296,7 +296,7 @@ class BelugaTRM(nn.Module):
             exp_action = (probs[j_idx, :num_actions] * action_idx).sum() / denom
             loss = loss + exp_action * priority
 
-        return loss * 2.0  # weight factor
+        return loss * 0.5  # weight factor
     
     def _compute_flight_balance_loss(self, probs, problem, jig_mask):
         """
@@ -359,7 +359,7 @@ class BelugaTRM(nn.Module):
                     # probability mass assigned to this flight for this jig
                     loss = loss + probs[j_idx, f_idx]
 
-        return loss * 15.0  # strongest weight
+        return loss * 0.1
 
 
 def create_beluga_trm(
