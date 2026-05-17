@@ -216,7 +216,7 @@ reports/                   # PDF reports
 
 **Mentors:**
 - Vinay Deshpande (Nvidia)
-- Mark Dokter (Know Center)
+- Mark Dokter (EuroCC Austria)
 
 **Recognition:**
 - 🥉 **#3 on Europe's HPC Portal** - "Ten Projects that Boosted AI Performance with GPUs"
