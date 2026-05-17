@@ -1,337 +1,242 @@
-# 🧠 Veriphi: Neural Network Robustness Verification
+# 🧠 Veriphi: Attack-Guided Neural Network Verification
 
-A **GPU‑accelerated verification stack** combining **attack‑guided adversarial search** with **formal bound certification**  
-(α‑, β‑CROWN via [auto‑LiRPA](https://github.com/Verified-Intelligence/auto_LiRPA)).
+**GPU-accelerated verification combining attack-guided adversarial search with formal α,β-CROWN certification.**
 
-Developed at **OpenACC Hackathon 2025** by Team Veriphi (TU Wien).
+[![Paper](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg)](https://arxiv.org)
+[![Models](https://img.shields.io/badge/🤗-Models-yellow)](https://huggingface.co/ludwigw)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-It answers a simple but critical question:
+> **Research Question:** Is this model provably robust within ε under L∞ perturbations?
 
-> **"Is this model provably robust within ε under L∞ or L2 perturbations?"**
-
-…and returns **verified / falsified**, with measured **runtime & memory**.
-
----
-
-## 🚀 Highlights
-
-✅ **Attack‑Guided Verification:**  
-   Fast falsification via FGSM + I‑FGSM (85% time reduction), then formal verification using α‑, β‑CROWN.
-
-✅ **Production Scale:**  
-   Successfully verified **105.8M parameter TRM** on real Airbus Beluga logistics (270 problems, 2.6s/sample).
-
-✅ **TRM‑MLP Integration:**  
-   Support for **Tiny Recursive Models (TRM)** — verified using the same unified pipeline.
-
-✅ **GPU‑Accelerated Verification:**  
-   Works seamlessly on **A100, RTX** or any CUDA‑enabled GPU. **5× speedup** over CPU baseline.
-
-✅ **Cross-Dataset Validation:**  
-   Comprehensive verification on **MNIST** and **CIFAR-10** with 3 training methods (Baseline, IBP, PGD).
-
-✅ **Multi-Bound Comparison:**  
-   Systematic evaluation of **CROWN, α-CROWN, β-CROWN** across datasets and models.
-
-✅ **Research Finding:**  
-   Training method effectiveness depends on dataset complexity—IBP excels on simple data, PGD dominates complex data.
+Developed at **AI Safety Hackathon 2025** (TU Wien) • Ranked **#3 on Europe's HPC Portal**
 
 ---
 
-## 🔧 Install (reproducible)
+## 🎯 Key Contributions
+
+**📄 Published Research:** [Veriphi: Attack-Guided Neural Network Verification with Dataset-Dependent Training Methods](https://arxiv.org)
+
+**🔬 Research Finding:** Training method effectiveness is fundamentally dataset-dependent:
+- **Simple datasets (MNIST, 784 dim):** IBP training achieves 78% verified accuracy
+- **Complex datasets (CIFAR-10, 3072 dim):** PGD adversarial training achieves 94% verified accuracy
+
+**⚡ Attack-Guided Speedup:** 5× faster verification (85% time reduction) by eliminating falsifiable cases with fast attacks before formal verification
+
+**🏭 Production Scale:** First-ever verification of 105.8M parameter model on real Airbus Beluga aerospace logistics (2.6s/sample on A100)
+
+---
+
+## 📊 Main Results
+
+### MNIST (28×28, β-CROWN, 512 samples)
+
+| Training Method | ε=0.04 | ε=0.06 | ε=0.08 | ε=0.1 |
+|----------------|--------|--------|--------|-------|
+| **IBP (ε=0.01)** | 47% | 61% | **78%** | 75% |
+| **PGD (ε=0.15)** | 43% | 48% | 63% | 63% |
+| **Baseline** | 0% | 0% | 0% | 0% |
+
+**Winner:** IBP (+15% over PGD at ε=0.08)
+
+### CIFAR-10 (32×32 RGB, β-CROWN, 512 samples)
+
+| Training Method | ε=0.001 | ε=0.002 | ε=0.004 | ε=0.006 | ε=0.008 |
+|----------------|---------|---------|---------|---------|---------|
+| **PGD (ε=8/255)** | **94%** | **90%** | **80%** | 67% | 58% |
+| **IBP (ε=2/255)** | 78% | 51% | 10% | 1% | 0% |
+| **Baseline** | 82% | 55% | 13% | 1% | 0% |
+
+**Winner:** PGD (+16% over IBP at ε=0.001, completely dominates at higher ε)
+
+---
+
+## 🚀 Quick Start
 
 ```bash
-# Clone
 git clone https://github.com/inquisitour/veriphi-verification.git
 cd veriphi-verification
 
-# Python env
 python3 -m venv venv
 source venv/bin/activate
 
-# Installation
 pip install git+https://github.com/Verified-Intelligence/auto_LiRPA.git
 pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121
-```
 
-Verify your toolchain:
-```bash
-python verify_installation.py
-```
-
----
-
-## 🚀 Quick smoke test
-
-```bash
-# From repo root
-source venv/bin/activate
 export PYTHONPATH="$PWD/src:$PYTHONPATH"
 python scripts/core_smoke.py
 ```
 
 ---
 
-## ⚡ GPU mode
+## 🧪 Reproduce Paper Results
 
-Veriphi fully supports **CUDA (A100, RTX, etc.)**.
-
-```bash
-# Enable GPU device
-export VERIPHI_DEVICE=cuda
-```
-
-All engines, attacks, and models will automatically run on the GPU.
-
----
-
-## 📊 Complete Verification Results
-
-### MNIST (28×28 grayscale, 512 samples)
-
-| Training Method | ε=0.04 | ε=0.06 | ε=0.08 | ε=0.1 | **Winner** |
-|----------------|--------|--------|--------|-------|------------|
-| **IBP (1/255)** | 47% | **77%** | **78%** | **75%** | 🥇 |
-| **PGD (2/255)** | 43% | 63% | 65% | 60% | 🥈 |
-| **Baseline** | 0% | 0% | 0% | 0% | ❌ |
-
-### CIFAR-10 (32×32 RGB, 512 samples)
-
-| Training Method | ε=0.001 | ε=0.002 | ε=0.004 | ε=0.006 | **Winner** |
-|----------------|---------|---------|---------|---------|------------|
-| **PGD (8/255)** | **94%** | **90%** | **80%** | **67%** | 🥇 |
-| **IBP (2/255)** | 78% | 51% | 10% | 1% | 🥈 |
-| **Baseline** | 82% | 55% | 13% | 1% | 🥉 |
-
-**Key Finding:** Training method effectiveness depends on dataset complexity:
-- **IBP dominates on simple MNIST** (75-78% @ ε=0.06-0.1)
-- **PGD dominates on complex CIFAR-10** (48-95% across all ε)
-- **Bound methods (α/β-CROWN)** provide <5% improvement over CROWN
-
----
-
-## 🚀 Production Scale: Airbus Beluga Logistics
-
-Successfully scaled to **105.8M parameter TRM** on real-world constraint satisfaction:
-
-**Dataset:** 270 Airbus Beluga logistics problems from TUPLES AI Challenge
-- 69-821 jigs per problem
-- 43-199 flights per problem
-- 5 constraint types (capacity, jig matching, type matching, exclusivity, multi-trip)
-
-**Performance:**
-- Verification: **2.6s per sample** on A100
-- Training loss: 930 → 2.26
-- GPU memory: Efficient scaling to 105M parameters
-- Successfully profiled with Nsight Systems
-
-**Achievement:** First-ever formal verification of constraint satisfaction model at this scale.
-
----
-
-## 🧩 TRM Experiments
-
-### Training Scripts
+### Train Models
 
 ```bash
 # MNIST
 python scripts/trm/core/trm_tiny_train.py              # Baseline
-python scripts/trm/core/trm_tiny_advtrain.py           # PGD adversarial
-python scripts/trm/core/trm_ibp_train.py               # IBP certified
+python scripts/trm/core/trm_ibp_train.py               # IBP (ε=0.01, 0.15)
+python scripts/trm/core/trm_tiny_advtrain.py           # PGD (ε=0.15, 0.20)
 
 # CIFAR-10
 python scripts/trm/core/trm_tiny_train_cifar10.py      # Baseline
-python scripts/trm/core/trm_tiny_advtrain_cifar10.py   # PGD adversarial
-python scripts/trm/core/trm_ibp_train_cifar10.py       # IBP certified
+python scripts/trm/core/trm_ibp_train_cifar10.py       # IBP (ε=2/255)
+python scripts/trm/core/trm_tiny_advtrain_cifar10.py   # PGD (ε=8/255)
 ```
 
-### Verification Sweeps
+### Run Verification Sweeps
 
 ```bash
-# MNIST - Full sweep (512 samples, 3 bounds)
+# MNIST (512 samples, β-CROWN)
 python scripts/trm/core/trm_tiny_sweep.py \
+  --checkpoint checkpoints/trm_mnist_ibp_eps015_weights.pt \
   --samples 512 \
   --eps 0.01,0.02,0.03,0.04,0.06,0.08,0.1 \
-  --bound CROWN
+  --bound beta-CROWN
 
-# CIFAR-10 - Full sweep
+# CIFAR-10 (512 samples, β-CROWN)
 python scripts/trm/core/trm_tiny_sweep_cifar10.py \
+  --checkpoint checkpoints/trm_cifar10_adv_eps007.pt \
   --samples 512 \
   --eps 0.001,0.002,0.004,0.006,0.008,0.01 \
-  --bound CROWN
+  --bound beta-CROWN
 ```
 
 ### Generate Reports
 
 ```bash
-# MNIST comprehensive report
 python scripts/trm/reports/trm_full_visual_report_mnist.py
-
-# CIFAR-10 comprehensive report
 python scripts/trm/reports/trm_full_visual_report_cifar10.py
-
-# Bound comparison across datasets
 python scripts/trm/reports/trm_compare_bounds_report.py
 ```
 
+Outputs: `plots/*.png`, `reports/*.pdf`
+
 ---
 
-## 🚀 Beluga Logistics Verification
+## 🤗 Pretrained Models
 
-### Dataset
-Real-world Airbus Beluga constraint satisfaction problems from TUPLES AI Challenge:
-- **270 logistics problems** (69-821 jigs, 43-199 flights each)
-- **5 constraint types:** capacity, jig matching, type matching, exclusivity, multi-trip
-- **Model:** 105.8M parameter TRM
+All models available on Hugging Face: [`ludwigw`](https://huggingface.co/ludwigw)
 
-### Training
-```bash
-# Train Beluga TRM (rebalanced constraints)
-python scripts/beluga/train_beluga.py \
-  --epochs 50 \
-  --batch_size 32 \
-  --device cuda
+**MNIST:**
+- [`trm-mnist-baseline`](https://huggingface.co/ludwigw/trm-mnist-baseline)
+- [`trm-mnist-ibp-eps001`](https://huggingface.co/ludwigw/trm-mnist-ibp-eps001) (ε=0.01)
+- [`trm-mnist-ibp-eps015`](https://huggingface.co/ludwigw/trm-mnist-ibp-eps015) (ε=0.15) ⭐
+- [`trm-mnist-adv-eps015`](https://huggingface.co/ludwigw/trm-mnist-adv-eps015) (PGD ε=0.15)
+- [`trm-mnist-adv-eps020`](https://huggingface.co/ludwigw/trm-mnist-adv-eps020) (PGD ε=0.20)
 
-# Monitor with TensorBoard
-tensorboard --logdir runs/beluga
-```
+**CIFAR-10:**
+- [`trm-cifar10-pgd`](https://huggingface.co/ludwigw/trm-cifar10-pgd) (PGD ε=8/255) ⭐
 
-**Output:** Checkpoint saved to `checkpoints/beluga_trm_105M.pt`
+**Beluga (105.8M):**
+- [`beluga-trm-105m`](https://huggingface.co/ludwigw/beluga-trm-105m) (Airbus logistics)
 
-### Verification
-```bash
-# Single sample verification
-python scripts/beluga/verify_beluga_sample.py \
-  --checkpoint checkpoints/beluga_trm_105M.pt \
-  --sample_idx 0
+---
 
-# Batch verification sweep
-python scripts/beluga/verify_beluga_sweep.py \
-  --checkpoint checkpoints/beluga_trm_105M.pt \
-  --samples 50 \
-  --timeout 300
-```
+## 🏭 Production: Airbus Beluga Logistics
 
-### Profiling
-```bash
-# Profile with Nsight Systems
-nsys profile -o beluga_profile \
-  python scripts/beluga/verify_beluga_sample.py \
-    --checkpoint checkpoints/beluga_trm_105M.pt
-
-# View timeline
-nsys-ui beluga_profile.qdrep
-```
-
-### Results
+**Dataset:** 2,336 real Airbus Beluga XL constraint satisfaction problems
+- Variable dimensions: 69-821 jigs, 43-199 flights per problem
+- 4 constraint types: flight capacity, rack capacity, scheduling, type matching
 
 **Performance:**
-- Verification: **2.6s per sample** (A100)
-- Training loss: 930 → 2.26
-- Memory: Efficient at 105M scale
+- **Training loss:** 930 → 2.26 (99.8% reduction)
+- **Verification:** 2.6s per sample (A100)
+- **Model:** 105.8M parameters with dynamic padding/masking
+
+```bash
+# Train
+python scripts/beluga/train_beluga.py --epochs 50 --device cuda
+
+# Verify
+python scripts/beluga/verify_beluga_sweep.py \
+  --checkpoint checkpoints/beluga_trm_105M.pt \
+  --samples 50
+```
 
 ---
 
-## 🏗️ Architecture Overview
+## 📈 Performance Metrics
+
+**Verification Time (A100):**
+- MNIST: 0.15-0.24s per sample
+- CIFAR-10: 0.09-0.24s per sample  
+- Beluga (105.8M): 2.6s per sample
+
+**GPU Memory:**
+- Academic benchmarks: 18-53 MB per sample
+- Production (105.8M): Efficient scaling validated
+
+**Bound Method Comparison:**
+- **CROWN:** Baseline (fastest)
+- **α-CROWN:** +0-5% accuracy, ~1.2× slower
+- **β-CROWN:** +0-9% accuracy, ~1.5× slower
+
+---
+
+## 🏗️ Architecture
 
 ```
 scripts/trm/
-├── core/
-│   ├── trm_tiny_train*.py           # Training scripts (MNIST/CIFAR-10)
-│   ├── trm_tiny_advtrain*.py        # PGD adversarial training
-│   ├── trm_ibp_train*.py            # IBP certified training
-│   ├── trm_tiny_verify*.py          # Single-sample verification
-│   └── trm_tiny_sweep*.py           # Batch verification sweeps
-├── reports/
-│   ├── trm_visualize_results.py           # Generate plots
-│   ├── trm_full_visual_report_*.py        # PDF reports (MNIST/CIFAR-10)
-│   └── trm_compare_bounds_report.py       # Multi-bound comparison
-└── presentation/
-    └── trm_presentation_slide.py          # PowerPoint generation
+├── core/                  # Training & verification
+│   ├── trm_tiny_train*.py
+│   ├── trm_ibp_train*.py
+│   ├── trm_tiny_advtrain*.py
+│   └── trm_tiny_sweep*.py
+├── reports/               # Visualization & PDFs
+└── presentation/          # PowerPoint generation
 
-checkpoints/          # Trained model weights
-logs/                 # CSV verification results
-plots/                # Generated visualizations
-reports/              # PDF reports
+checkpoints/               # Model weights (.pt)
+logs/                      # CSV verification results
+plots/                     # Generated figures
+reports/                   # PDF reports
 ```
 
 ---
 
-## 📊 Performance Metrics
+## 🎓 Citation
 
-**Academic Benchmarks:**
-- **MNIST:** ~0.15-0.24s per sample
-- **CIFAR-10:** ~0.09-0.24s per sample
-- **GPU Memory:** 18-53 MB per sample (A100)
-
-**Production Scale (Beluga):**
-- **105.8M parameters:** 2.6s per sample
-- **GPU Speedup:** 5× faster than CPU baseline
-- **Energy Efficiency:** 4× improvement (reduced time + lower power)
-
-**Bound Method Comparison:**
-- **CROWN:** Fastest, baseline accuracy
-- **α-CROWN:** +0-5% accuracy, ~1.2× slower
-- **β-CROWN:** +0-9% accuracy (baselines only), ~1.5× slower
+```bibtex
+@article{deshmukh2026veriphi,
+  title={Veriphi: Attack-Guided Neural Network Verification with Dataset-Dependent Training Methods},
+  author={Deshmukh, Pratik and Savin, Vasili and Arya, Kartik},
+  journal={arXiv preprint arXiv:XXXX.XXXXX},
+  year={2026}
+}
+```
 
 ---
 
-## 🧭 Roadmap
+## 🏆 Team & Recognition
 
-| Stage | Goal | Status |
-|--------|------|--------|
-| 1️⃣ | CUDA acceleration (A100 verified) | ✅ |
-| 2️⃣ | TRM-MLP recursive architecture | ✅ |
-| 3️⃣ | Multiple training methods (Baseline, IBP, PGD) | ✅ |
-| 4️⃣ | Cross-dataset validation (MNIST + CIFAR-10) | ✅ |
-| 5️⃣ | Multi-bound comparison (CROWN, α/β-CROWN) | ✅ |
-| 6️⃣ | Comprehensive reporting & visualization | ✅ |
-| 7️⃣ | Production scale (105M params, Airbus logistics) | ✅ |
-| 8️⃣ | Multi-GPU distributed verification | 🔜 |
-| 9️⃣ | Scale to ImageNet & larger models | 🔜 |
+**Team Veriphi** (TU Wien):
+- Pratik Deshmukh
+- Vasili Savin
+- Kartik Arya
 
----
+**Mentors:**
+- Vinay Deshpande (Nvidia)
+- Mark Dokter (Know Center)
 
-## 🏆 Hackathon Achievements
-
-**OpenACC Hackathon 2025 - Team Veriphi (TU Wien)**
-
-- 🥇 First-ever verification of 105.8M parameter constraint satisfaction model
-- 🚀 5× GPU speedup with attack-guided strategy (85% time reduction)
-- 🔬 Research finding: training method effectiveness ↔ dataset complexity
-- 📊 Comprehensive cross-dataset validation (MNIST + CIFAR-10)
-- ⚡ Successfully profiled with Nsight Systems
-- 🌍 Real-world application: Airbus Beluga aerospace logistics
-
-**Team:** Pratik Deshmukh, Vasili Savin, Kartik Arya  
-**Mentors:** Vinay Deshpande (Nvidia), Mark Dokter (Know Center)
-
----
-
-## 📒 Guides
-
-- [VSC5 Connection Guide (CLI)](./docs/vsc5_connection_readme.md)
-- [Benchmarking Guide](./docs/trm_scaling_readme.md)
-- [Final Presentation](./docs/Presentation.pdf/)
+**Recognition:**
+- 🥉 **#3 on Europe's HPC Portal** - "Ten Projects that Boosted AI Performance with GPUs"
+- 🏅 AI Safety Hackathon 2025, TU Wien
 
 ---
 
 ## 📚 References
 
-- **auto‑LiRPA Docs:** https://auto-lirpa.readthedocs.io/  
-- **α,β‑CROWN Repo:** https://github.com/Verified-Intelligence/alpha-beta-CROWN  
-- **Tiny Recursive Models:** https://github.com/SamsungSAILMontreal/TinyRecursiveModels  
-- **VNN‑COMP:** https://sites.google.com/view/vnn2024  
-- **TUPLES Challenge:** https://github.com/TUPLES-Trustworthy-AI/Beluga-AI-Challenge
+- [auto-LiRPA Documentation](https://auto-lirpa.readthedocs.io/)
+- [α,β-CROWN Repository](https://github.com/Verified-Intelligence/alpha-beta-CROWN)
+- [Tiny Recursive Models](https://github.com/SamsungSAILMontreal/TinyRecursiveModels)
+- [VNN-COMP](https://sites.google.com/view/vnn2024)
 
 ---
 
 ## 📄 License
 
-MIT — see `LICENSE`.
+MIT License - see [LICENSE](LICENSE)
 
 ---
- 
-**"Bridging adversarial testing and formal verification for truly robust neural networks."**
 
-*Enabling real-world AI safety validation in safety-critical applications.*
+**"Bridging adversarial testing and formal verification for production AI safety."**
