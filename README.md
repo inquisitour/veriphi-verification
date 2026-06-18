@@ -14,7 +14,7 @@ Developed at **AI Safety Hackathon 2025** (TU Wien) • Ranked **#3 on Europe's 
 
 ## 🎯 Key Contributions
 
-**📄 Published Research:** [Veriphi: Attack-Guided Neural Network Verification with Dataset-Dependent Training Methods](https://arxiv.org)
+**📄 Published Research:** [Veriphi: Attack-Guided Neural Network Verification with Dataset-Dependent Training Methods](https://arxiv.org/abs/2606.18454)
 
 **🔬 Research Finding:** Training method effectiveness is fundamentally dataset-dependent:
 - **Simple datasets (MNIST, 784 dim):** IBP training achieves 78% verified accuracy
