@@ -2,7 +2,7 @@
 
 **GPU-accelerated verification combining attack-guided adversarial search with formal α,β-CROWN certification.**
 
-[![Paper](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg)](https://arxiv.org)
+[![Paper](https://img.shields.io/badge/arXiv-2606.18454-b31b1b.svg)](https://arxiv.org/abs/2606.18454)
 [![Models](https://img.shields.io/badge/🤗-Models-yellow)](https://huggingface.co/ludwigw)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -200,7 +200,7 @@ reports/                   # PDF reports
 @article{deshmukh2026veriphi,
   title={Veriphi: Attack-Guided Neural Network Verification with Dataset-Dependent Training Methods},
   author={Deshmukh, Pratik and Savin, Vasili and Arya, Kartik},
-  journal={arXiv preprint arXiv:XXXX.XXXXX},
+  journal={arXiv preprint arXiv:2606.18454},
   year={2026}
 }
 ```
